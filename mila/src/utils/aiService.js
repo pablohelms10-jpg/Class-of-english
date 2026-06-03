@@ -83,6 +83,11 @@ async function matchImages(topics, images) {
 
   const selected = spreadImages(images, Math.min(images.length, 12));
 
+  console.group('[MILA matchImages] Iniciando asignación');
+  console.log('Imágenes seleccionadas:', selected.length, '— Nodos:', topics.length);
+  console.log('Nodos:', topics.map((t, i) => `${i}. ${t}`));
+  console.groupEnd();
+
   const prompt = `Sos un sistema OCR especializado en diapositivas médicas. Tu única tarea es leer el texto impreso en cada imagen y compararlo con una lista de conceptos.
 
 REGLA ABSOLUTA: El texto visible en la imagen es la ÚNICA señal válida para la asignación.
@@ -107,30 +112,73 @@ EJEMPLOS DE APLICACIÓN CORRECTA:
 
 UNICIDAD: cada imagen puede asignarse como máximo a UN concepto. Si dos conceptos coinciden con la misma imagen, elegí el más exacto. El otro recibe null.
 
-Respondé SOLO con JSON válido, exactamente ${topics.length} valores:
-{"assignments": [0, null, 2, null, 1]}
+FORMATO DE RESPUESTA — devolvé un JSON con dos campos:
+1. "images": array de ${selected.length} objetos, uno por imagen, en orden de índice:
+   { "idx": 0, "ocr": "todo el texto detectado en la imagen", "match": número de concepto o null, "reason": "por qué coincide o por qué null" }
+2. "assignments": array de ${topics.length} valores (índice de imagen o null), uno por concepto.
 
-No incluyas explicaciones. Solo el JSON.`;
+Ejemplo con 3 imágenes y 4 conceptos:
+{
+  "images": [
+    { "idx": 0, "ocr": "Articulación Temporomandibular", "match": 2, "reason": "texto exacto coincide con concepto 2" },
+    { "idx": 1, "ocr": "sin texto claro", "match": null, "reason": "no hay texto legible" },
+    { "idx": 2, "ocr": "Hueso Cigomático — cara lateral", "match": 0, "reason": "texto menciona concepto 0 explícitamente" }
+  ],
+  "assignments": [2, null, null, 0]
+}`;
 
   try {
     const raw = await askClaude(prompt, selected);
+    console.log('[MILA matchImages] Respuesta cruda de Claude:\n', raw);
+
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('no json');
     const parsed = JSON.parse(jsonMatch[0]);
+
+    // Log per-image OCR debug
+    if (parsed.images) {
+      console.group('[MILA matchImages] OCR por imagen');
+      parsed.images.forEach(img => {
+        const score = img.match != null ? '✅ MATCH' : '❌ null';
+        console.group(`Imagen #${img.idx} → ${score}`);
+        console.log('OCR detectado:', img.ocr || '(vacío)');
+        console.log('Concepto asignado:', img.match != null ? `${img.match}. "${topics[img.match]}"` : 'null');
+        console.log('Razón:', img.reason || '—');
+        console.groupEnd();
+      });
+      console.groupEnd();
+    }
+
     const assignments = parsed.assignments || [];
+
+    // Log per-concept assignment
+    console.group('[MILA matchImages] Asignación por nodo');
+    topics.forEach((topic, i) => {
+      const si = assignments[i];
+      const origIdx = si != null ? selected[si]?._origIdx : null;
+      console.log(`Nodo ${i} "${topic}" → imagen ${si != null ? si : 'null'} (origIdx: ${origIdx ?? 'null'})`);
+    });
+    console.groupEnd();
 
     // Enforce uniqueness: if the same image index is used twice, keep only the first
     const usedIndices = new Set();
-    return topics.map((_, i) => {
+    const result = topics.map((_, i) => {
       const si = assignments[i];
       if (si == null) return null;
       const idx = typeof si === 'number' ? si : parseInt(si);
       if (isNaN(idx) || idx < 0 || idx >= selected.length) return null;
-      if (usedIndices.has(idx)) return null;
+      if (usedIndices.has(idx)) {
+        console.warn(`[MILA matchImages] Imagen ${idx} duplicada para nodo ${i} "${topics[i]}" — descartada`);
+        return null;
+      }
       usedIndices.add(idx);
       return selected[idx]?._origIdx ?? null;
     });
-  } catch {
+
+    console.log('[MILA matchImages] Resultado final (origIdx por nodo):', result);
+    return result;
+  } catch (err) {
+    console.error('[MILA matchImages] Error en el pipeline:', err);
     // On error return all nulls — never force-distribute wrong images
     return topics.map(() => null);
   }
