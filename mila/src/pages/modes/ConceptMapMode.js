@@ -1,15 +1,26 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateConceptMap } from '../../utils/parseContent';
+import { generateConceptMapAI } from '../../utils/aiService';
 
 export default function ConceptMapMode({ text }) {
-  const initial = useMemo(() => generateConceptMap(text || ''), [text]);
-  const [nodes, setNodes] = useState(initial.nodes);
+  const [mapData, setMapData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [nodes, setNodes] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [draggingId, setDraggingId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const svgRef = useRef();
 
+  useEffect(() => {
+    setLoading(true);
+    generateConceptMapAI(text || '')
+      .then(data => { setMapData(data); setNodes(data.nodes); })
+      .catch(() => { const fb = generateConceptMap(text || ''); setMapData(fb); setNodes(fb.nodes); })
+      .finally(() => setLoading(false));
+  }, [text]);
+
+  const edges = mapData?.edges || [];
   const svgW = 800;
   const svgH = 560;
 
@@ -51,6 +62,17 @@ export default function ConceptMapMode({ text }) {
     setEditingId(null);
   }
 
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: '64px 0' }}>
+      <div style={{ width: 48, height: 48, borderRadius: 16, margin: '0 auto 20px', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s ease-in-out infinite' }}>
+        <span style={{ color: 'white', fontSize: 22, fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>M</span>
+      </div>
+      <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 6 }}>MILA está construyendo el mapa conceptual…</p>
+      <p style={{ fontSize: 12, color: 'var(--text-light)' }}>Esto puede tomar unos segundos</p>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.7;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}`}</style>
+    </div>
+  );
+
   if (!text || nodes.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
@@ -89,7 +111,7 @@ export default function ConceptMapMode({ text }) {
             </marker>
           </defs>
 
-          {initial.edges.map((edge, i) => {
+          {edges.map((edge, i) => {
             const from = nodeMap[edge.from];
             const to = nodeMap[edge.to];
             if (!from || !to) return null;

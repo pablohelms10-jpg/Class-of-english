@@ -1,15 +1,27 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { generateFlashcards } from '../../utils/parseContent';
+import { generateFlashcardsAI } from '../../utils/aiService';
 
 export default function FlashcardsMode({ text }) {
-  const cards = useMemo(() => generateFlashcards(text || ''), [text]);
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(new Set());
   const [unknown, setUnknown] = useState(new Set());
 
+  useEffect(() => {
+    setLoading(true);
+    generateFlashcardsAI(text || '')
+      .then(setCards)
+      .catch(() => setCards(generateFlashcards(text || '')))
+      .finally(() => setLoading(false));
+  }, [text]);
+
+  if (loading) return <LoadingAI message="MILA está generando tus flashcards…" />;
+
   if (!text || cards.length === 0) {
-    return <EmptyState message="No hay suficiente texto para generar flashcards. Asegúrate de tener al menos un párrafo con definiciones o conceptos." />;
+    return <EmptyState message="No hay suficiente texto para generar flashcards." />;
   }
 
   const card = cards[index];
@@ -212,6 +224,24 @@ function EmptyState({ message }) {
     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
       <p style={{ fontSize: 14, lineHeight: 1.7, maxWidth: 320, margin: '0 auto' }}>{message}</p>
+    </div>
+  );
+}
+
+function LoadingAI({ message }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '64px 0' }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 16, margin: '0 auto 20px',
+        background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        animation: 'pulse 1.5s ease-in-out infinite',
+      }}>
+        <span style={{ color: 'white', fontSize: 22, fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>M</span>
+      </div>
+      <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 6 }}>{message}</p>
+      <p style={{ fontSize: 12, color: 'var(--text-light)' }}>Esto puede tomar unos segundos</p>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.7;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}`}</style>
     </div>
   );
 }
