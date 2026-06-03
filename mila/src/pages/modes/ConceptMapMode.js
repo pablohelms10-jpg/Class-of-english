@@ -133,6 +133,9 @@ export default function ConceptMapMode({ summary }) {
   const momentumRef = useRef(null);
   const velocityRef = useRef({ x: 0, y: 0 });
   const lastTouchTimeRef = useRef(null);
+  // Spring drag: target position (follows mouse instantly), spring RAF loop
+  const dragTargetRef = useRef(null); // { id, x, y }
+  const springRafRef = useRef(null);
 
   useEffect(() => { panRef.current = pan; }, [pan]);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
@@ -373,13 +376,10 @@ export default function ConceptMapMode({ summary }) {
     if (dragging) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPositions(prev => ({
-        ...prev,
-        [dragging.id]: {
-          x: (e.clientX - rect.left - panRef.current.x) / scaleRef.current - dragging.ox,
-          y: (e.clientY - rect.top - panRef.current.y) / scaleRef.current - dragging.oy,
-        }
-      }));
+      // Update target ref only — spring loop animates positions toward it
+      const tx = (e.clientX - rect.left - panRef.current.x) / scaleRef.current - dragging.ox;
+      const ty = (e.clientY - rect.top - panRef.current.y) / scaleRef.current - dragging.oy;
+      if (dragTargetRef.current) { dragTargetRef.current.x = tx; dragTargetRef.current.y = ty; }
     } else if (isPanning && panStart.current) {
       const newPan = {
         x: panStart.current.px + (e.clientX - panStart.current.mx),
@@ -391,7 +391,11 @@ export default function ConceptMapMode({ summary }) {
   }, [dragging, isPanning]);
 
   const onMouseUp = useCallback(() => {
-    setDragging(null); setIsPanning(false); panStart.current = null;
+    setDragging(null);
+    setIsPanning(false);
+    panStart.current = null;
+    dragTargetRef.current = null;
+    if (springRafRef.current) { cancelAnimationFrame(springRafRef.current); springRafRef.current = null; }
   }, []);
 
   function startNodeDrag(e, node) {
@@ -399,11 +403,27 @@ export default function ConceptMapMode({ summary }) {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const pos = positions[node.id] || { x: node.x, y: node.y };
-    setDragging({
+    const info = {
       id: node.id,
       ox: (e.clientX - rect.left - panRef.current.x) / scaleRef.current - pos.x,
       oy: (e.clientY - rect.top - panRef.current.y) / scaleRef.current - pos.y,
-    });
+    };
+    setDragging(info);
+    dragTargetRef.current = { id: node.id, x: pos.x, y: pos.y };
+    // Spring loop: node position springs toward dragTargetRef at 60fps
+    if (springRafRef.current) cancelAnimationFrame(springRafRef.current);
+    function springLoop() {
+      const t = dragTargetRef.current;
+      if (!t) { springRafRef.current = null; return; }
+      setPositions(prev => {
+        const cur = prev[t.id] || { x: t.x, y: t.y };
+        const dx = t.x - cur.x, dy = t.y - cur.y;
+        if (Math.abs(dx) < 0.2 && Math.abs(dy) < 0.2) return prev;
+        return { ...prev, [t.id]: { x: cur.x + dx * 0.16, y: cur.y + dy * 0.16 } };
+      });
+      springRafRef.current = requestAnimationFrame(springLoop);
+    }
+    springRafRef.current = requestAnimationFrame(springLoop);
   }
 
   function toggleExpand(id) {
@@ -475,17 +495,17 @@ export default function ConceptMapMode({ summary }) {
       {/* Progress bar */}
       <div style={{ marginBottom: 8, flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.3px' }}>
             {masteredCount} / {totalCount} conceptos dominados
           </span>
         </div>
-        <div style={{ height: 4, borderRadius: 2, background: 'var(--whisper-grey)', overflow: 'hidden' }}>
+        <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
           <div style={{
             height: '100%',
             width: `${progressPct}%`,
             background: progressPct === 100
-              ? '#7BAE7F'
-              : 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))',
+              ? 'rgba(74,222,128,0.7)'
+              : 'linear-gradient(90deg, rgba(140,100,200,0.8), rgba(180,140,100,0.7))',
             borderRadius: 2,
             transition: 'width 0.4s ease',
           }} />
@@ -494,10 +514,10 @@ export default function ConceptMapMode({ summary }) {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0 }}>
-        <p style={{ fontSize: 12, color: 'var(--text-light)' }}>
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.2px' }}>
           {isFullscreen
             ? (mapData.title || 'Mapa conceptual')
-            : 'Pellizca · arrastrá para mover · ⛶ pantalla completa'}
+            : 'Pellizca · arrastrá · ⛶ pantalla completa'}
         </p>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button onClick={() => zoom(1.2)} style={toolBtnStyle} title="Acercar">+</button>
@@ -525,39 +545,24 @@ export default function ConceptMapMode({ summary }) {
         </div>
       </div>
 
-      {/* Canvas — touch-action:none forced on all children to prevent iOS scroll override */}
+      {/* Canvas */}
       <style>{`
         [data-mila-map],[data-mila-map] *{touch-action:none!important;-webkit-user-select:none;user-select:none}
-        @keyframes nodeFloat {
-          0%,100%{transform:translateY(0px) scale(1);}
-          50%{transform:translateY(-4px) scale(1.005);}
+        @keyframes neuralPulse {
+          0%   { stroke-dashoffset: 1200; opacity: 0; }
+          8%   { opacity: 1; }
+          88%  { opacity: 0.9; }
+          100% { stroke-dashoffset: -80; opacity: 0; }
         }
-        @keyframes auroraBlob {
-          0%,100%{transform:translate(0,0) scale(1);opacity:0.055;}
-          33%{transform:translate(40px,-25px) scale(1.08);opacity:0.08;}
-          66%{transform:translate(-25px,18px) scale(0.95);opacity:0.06;}
-        }
-        @keyframes auroraBlob2 {
-          0%,100%{transform:translate(0,0) scale(1);opacity:0.045;}
-          40%{transform:translate(-35px,30px) scale(1.1);opacity:0.07;}
-          75%{transform:translate(28px,-18px) scale(0.93);opacity:0.05;}
-        }
-        @keyframes edgePulse {
-          0%,100%{opacity:0.38;}
-          50%{opacity:0.6;}
-        }
-        @keyframes glassShimmer {
-          0%{background-position:200% center;}
-          100%{background-position:-200% center;}
+        @keyframes coreBreath {
+          0%,100% { opacity: 0.22; }
+          50%     { opacity: 0.42; }
         }
         .mila-node-card {
-          border-radius:12px;
-          overflow:hidden;
-          will-change:transform;
-          transition:box-shadow 0.35s cubic-bezier(0.4,0,0.2,1),transform 0.35s cubic-bezier(0.4,0,0.2,1);
-        }
-        .mila-node-card:not(.is-dragging) {
-          animation: nodeFloat var(--float-dur,5.5s) ease-in-out var(--float-delay,0s) infinite;
+          border-radius: 14px;
+          overflow: hidden;
+          will-change: transform;
+          transition: box-shadow 0.4s cubic-bezier(0.22,1,0.36,1);
         }
       `}</style>
       <div
@@ -572,25 +577,19 @@ export default function ConceptMapMode({ summary }) {
           height: isFullscreen ? undefined : 620,
           flex: isFullscreen ? 1 : undefined,
           overflow: 'hidden',
-          borderRadius: 10,
-          border: '1px solid rgba(200,193,185,0.5)',
+          borderRadius: 12,
+          border: '1px solid rgba(255,255,255,0.07)',
           position: 'relative',
           cursor: dragging ? 'grabbing' : isPanning ? 'grabbing' : 'grab',
-          background: 'var(--pale-mist)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 20px rgba(0,0,0,0.06)',
+          background: '#0c0c10',
+          boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 8px 48px rgba(0,0,0,0.7)',
           userSelect: 'none',
           touchAction: 'none',
           WebkitOverflowScrolling: 'auto',
         }}
       >
-        {/* Aurora blobs — very slow, barely visible, give depth to the canvas */}
-        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', width: 520, height: 520, borderRadius: '50%', background: 'radial-gradient(circle, var(--ash-plum) 0%, transparent 70%)', top: '5%', left: '15%', animation: 'auroraBlob 18s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, var(--driftwood) 0%, transparent 70%)', bottom: '10%', right: '20%', animation: 'auroraBlob2 22s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, var(--ash-plum) 0%, transparent 70%)', bottom: '30%', left: '55%', animation: 'auroraBlob 28s ease-in-out 6s infinite' }} />
-        </div>
-        {/* Dot grid */}
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, rgba(180,172,165,0.45) 1px, transparent 1px)', backgroundSize: '28px 28px', pointerEvents: 'none', zIndex: 0 }} />
+        {/* Dot grid — white, very faint, premium dark look */}
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)', backgroundSize: '24px 24px', pointerEvents: 'none', zIndex: 0 }} />
 
         {/* Transformed canvas */}
         <div style={{
@@ -601,15 +600,14 @@ export default function ConceptMapMode({ summary }) {
           willChange: 'transform',
           zIndex: 1,
         }}>
-          {/* SVG edges */}
+          {/* SVG edges — neural glow with animated energy pulse */}
           <svg style={{ position: 'absolute', inset: 0, width: CANVAS_W, height: CANVAS_H, pointerEvents: 'none', zIndex: 1 }}>
             <defs>
-              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="var(--driftwood)" opacity="0.55" />
-              </marker>
-              <filter id="edgeGlow">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              <filter id="neuralGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
+              </filter>
+              <filter id="neuralGlowSoft" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
               </filter>
             </defs>
             {edges.map((edge, i) => {
@@ -622,19 +620,33 @@ export default function ConceptMapMode({ summary }) {
               const tx = tp.x + NODE_W / 2, ty = tp.y + 30;
               const midY = (fy + ty) / 2;
               const d = `M ${fx} ${fy} C ${fx} ${midY} ${tx} ${midY} ${tx} ${ty}`;
-              const delay = `${(i * 1.3) % 6}s`;
+              const pulseDur = `${2.8 + (i * 0.55) % 1.8}s`;
+              const pulseDelay = `${(i * 0.9) % 4}s`;
               return (
                 <g key={i}>
-                  {/* Glow trail */}
-                  <path d={d} fill="none" stroke="var(--driftwood)" strokeWidth="4" opacity="0.07" strokeLinecap="round"
-                    style={{ animation: `edgePulse 4s ease-in-out ${delay} infinite` }} />
-                  {/* Main line */}
-                  <path d={d} fill="none" stroke="var(--driftwood)" strokeWidth="1.5" strokeLinecap="round"
-                    markerEnd="url(#arrowhead)"
-                    style={{ animation: `edgePulse 4s ease-in-out ${delay} infinite` }} />
+                  {/* Wide outer glow — blurred, barely visible */}
+                  <path d={d} fill="none" stroke="white" strokeWidth="18" opacity="0.018"
+                    filter="url(#neuralGlow)" strokeLinecap="round" />
+                  {/* Medium glow halo */}
+                  <path d={d} fill="none" stroke="white" strokeWidth="6" opacity="0.055"
+                    filter="url(#neuralGlowSoft)" strokeLinecap="round"
+                    style={{ animation: `coreBreath 3.5s ease-in-out ${pulseDelay} infinite` }} />
+                  {/* Core static line */}
+                  <path d={d} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8"
+                    strokeLinecap="round" />
+                  {/* Traveling pulse glow */}
+                  <path d={d} fill="none" stroke="white" strokeWidth="7" strokeLinecap="round"
+                    strokeDasharray="60 1140" strokeDashoffset="1200" opacity="0.28"
+                    filter="url(#neuralGlowSoft)"
+                    style={{ animation: `neuralPulse ${pulseDur} ease-in-out ${pulseDelay} infinite` }} />
+                  {/* Traveling pulse core — bright white dot */}
+                  <path d={d} fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round"
+                    strokeDasharray="30 1170" strokeDashoffset="1200" opacity="0.95"
+                    style={{ animation: `neuralPulse ${pulseDur} ease-in-out ${pulseDelay} infinite` }} />
                   {edge.label && (
-                    <text x={(fx + tx) / 2} y={midY - 6} textAnchor="middle" fontSize="9.5" fill="var(--text-light)"
-                      fontFamily="Inter, sans-serif" opacity="0.75">{edge.label}</text>
+                    <text x={(fx + tx) / 2} y={midY - 8} textAnchor="middle" fontSize="9"
+                      fill="rgba(255,255,255,0.3)" fontFamily="Inter, sans-serif"
+                      letterSpacing="0.5">{edge.label}</text>
                   )}
                 </g>
               );
@@ -666,85 +678,76 @@ export default function ConceptMapMode({ summary }) {
             const nodeQCount = questions.filter(q => q.conceptLabel === node.label).length;
             const genState = nodeGenerating[node.id] || null;
 
-            // Float duration and delay staggered per node so they don't sync
-            const floatDur = `${5 + (node.id % 4) * 0.7}s`;
-            const floatDelay = `${(node.id * 1.1) % 5}s`;
-
-            // Liquid Glass styles per node type
-            const glassMain = {
-              background: 'linear-gradient(135deg, rgba(107,76,119,0.82) 0%, rgba(139,115,85,0.82) 100%)',
-              backdropFilter: 'blur(24px) saturate(1.6)',
-              WebkitBackdropFilter: 'blur(24px) saturate(1.6)',
-              border: '1px solid rgba(255,255,255,0.28)',
+            // Dark premium node styles
+            const darkMain = {
+              background: 'linear-gradient(145deg, rgba(58,38,78,0.97) 0%, rgba(32,26,48,0.97) 100%)',
+              border: '1px solid rgba(180,150,220,0.18)',
               boxShadow: isExpanded
-                ? '0 24px 56px rgba(107,76,119,0.40), inset 0 1px 0 rgba(255,255,255,0.35), 0 0 0 0.5px rgba(255,255,255,0.12)'
-                : '0 8px 28px rgba(107,76,119,0.28), inset 0 1px 0 rgba(255,255,255,0.3)',
+                ? '0 0 0 1px rgba(180,150,220,0.12), 0 24px 60px rgba(0,0,0,0.8), 0 0 40px rgba(120,80,180,0.12)'
+                : '0 0 0 1px rgba(180,150,220,0.08), 0 8px 32px rgba(0,0,0,0.7)',
             };
-            const glassSub = {
-              background: 'rgba(255,255,255,0.68)',
-              backdropFilter: 'blur(20px) saturate(1.5)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
-              border: '1px solid rgba(193,183,175,0.55)',
+            const darkSub = {
+              background: 'rgba(22,22,30,0.97)',
+              border: '1px solid rgba(255,255,255,0.1)',
               boxShadow: isExpanded
-                ? '0 20px 48px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 0.5px rgba(139,115,85,0.18)'
-                : '0 4px 18px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85)',
+                ? '0 0 0 1px rgba(255,255,255,0.06), 0 20px 50px rgba(0,0,0,0.75)'
+                : '0 0 0 1px rgba(255,255,255,0.04), 0 4px 20px rgba(0,0,0,0.6)',
             };
-            const glassDetail = {
-              background: 'rgba(255,255,255,0.56)',
-              backdropFilter: 'blur(16px) saturate(1.4)',
-              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-              border: '1px solid rgba(200,195,190,0.45)',
+            const darkDetail = {
+              background: 'rgba(18,18,24,0.96)',
+              border: '1px solid rgba(255,255,255,0.07)',
               boxShadow: isExpanded
-                ? '0 16px 40px rgba(0,0,0,0.11), inset 0 1px 0 rgba(255,255,255,0.8)'
-                : '0 2px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.75)',
+                ? '0 0 0 1px rgba(255,255,255,0.04), 0 16px 40px rgba(0,0,0,0.7)'
+                : '0 0 0 1px rgba(255,255,255,0.03), 0 2px 14px rgba(0,0,0,0.55)',
             };
-            const glassStyle = isMain ? glassMain : isSub ? glassSub : glassDetail;
+            const cardStyle = isMain ? darkMain : isSub ? darkSub : darkDetail;
 
             return (
-              // Outer div: only position — no visual styles so drag math stays clean
+              // Outer div: only position — no visual styles so spring drag math stays clean
               <div key={node.id} style={{
                 position: 'absolute', left: pos.x, top: pos.y, width: NODE_W,
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
               }}>
-                {/* Inner glass card: all visuals + float animation */}
+                {/* Inner dark card — all visuals, no transform so drag origin is exact */}
                 <div
-                  className={`mila-node-card${dragging?.id === node.id ? ' is-dragging' : ''}`}
-                  style={{
-                    '--float-dur': floatDur,
-                    '--float-delay': floatDelay,
-                    ...glassStyle,
-                  }}
+                  className="mila-node-card"
+                  style={cardStyle}
                 >
                 {/* Header — drag handle + expand toggle */}
                 <div
                   onMouseDown={e => startNodeDrag(e, node)}
                   onClick={() => toggleExpand(node.id)}
-                  style={{ padding: '10px 12px', cursor: 'grab', display: 'flex', alignItems: 'flex-start', gap: 8, userSelect: 'none' }}
+                  style={{ padding: '11px 13px', cursor: 'grab', display: 'flex', alignItems: 'flex-start', gap: 9, userSelect: 'none' }}
                 >
-                  <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: dotColor, transition: 'background 0.3s' }} />
+                  <div style={{
+                    flexShrink: 0, marginTop: 4, width: 7, height: 7, borderRadius: '50%',
+                    background: isMastered ? '#4ade80' : isMain ? 'rgba(200,170,255,0.8)' : isSub ? 'rgba(150,130,200,0.7)' : 'rgba(255,255,255,0.25)',
+                    boxShadow: isMastered ? '0 0 6px #4ade8088' : isMain ? '0 0 8px rgba(200,170,255,0.6)' : 'none',
+                    transition: 'background 0.3s, box-shadow 0.3s',
+                  }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: isMain ? 'white' : 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
-                    <div style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.72)' : 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.92)', lineHeight: 1.3, marginBottom: 3, letterSpacing: '0.1px' }}>{node.label}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.42)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
                   </div>
-                  <span style={{ flexShrink: 0, fontSize: 9, color: isMain ? 'rgba(255,255,255,0.45)' : 'var(--text-light)', paddingTop: 3 }}>{isExpanded ? '▲' : '▼'}</span>
+                  <span style={{ flexShrink: 0, fontSize: 8, color: 'rgba(255,255,255,0.25)', paddingTop: 4 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
 
                 {/* Expanded body */}
                 {isExpanded && (
-                  <div style={{ borderTop: `1px solid ${isMain ? 'rgba(255,255,255,0.2)' : 'var(--soft-grey)'}` }}>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
                     {img && (
                       <div style={{ width: '100%', height: 200, overflow: 'hidden' }}>
-                        <img src={img.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                        <img src={img.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block', opacity: 0.9 }} />
                       </div>
                     )}
-                    <div style={{ padding: '12px 12px 14px' }}>
-                      {node.content && <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
+                    <div style={{ padding: '12px 13px 14px' }}>
+                      {node.content && <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.62)', lineHeight: 1.7, marginBottom: 10 }}>{node.content}</p>}
                       {node.bullets?.length > 0 && (
                         <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
                           {node.bullets.map((b, bi) => (
-                            <li key={bi} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
-                              <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.6)' : 'var(--driftwood)', marginTop: 5 }} />
-                              <span style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.82)' : 'var(--text-dark)', lineHeight: 1.5 }}>{b}</span>
+                            <li key={bi} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                              <span style={{ flexShrink: 0, width: 4, height: 4, borderRadius: '50%', background: isMain ? 'rgba(200,170,255,0.6)' : 'rgba(255,255,255,0.3)', marginTop: 5.5 }} />
+                              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.72)', lineHeight: 1.55 }}>{b}</span>
                             </li>
                           ))}
                         </ul>
@@ -757,40 +760,40 @@ export default function ConceptMapMode({ summary }) {
                       {linkedQuestion && <MiniQuestion question={linkedQuestion} />}
 
                       {/* Per-node generate buttons */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                      <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>
                         <button
                           onClick={e => { e.stopPropagation(); generateNodeCards(node); }}
                           disabled={!!genState}
                           style={{
                             flex: 1, padding: '6px 8px', borderRadius: 7,
-                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
-                            background: 'transparent',
-                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(255,255,255,0.05)',
+                            color: 'rgba(255,255,255,0.6)',
                             fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
-                            opacity: genState && genState !== 'flashcards' ? 0.4 : 1,
+                            opacity: genState && genState !== 'flashcards' ? 0.35 : 1,
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                            transition: 'opacity 0.15s',
+                            transition: 'opacity 0.15s, background 0.15s',
                           }}
                         >
                           {genState === 'flashcards' ? '⟳' : '＋'}
-                          {nodeCardCount > 0 ? `Flashcards (${nodeCardCount})` : 'Flashcards'}
+                          {nodeCardCount > 0 ? `Cards (${nodeCardCount})` : 'Cards'}
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); generateNodeQs(node); }}
                           disabled={!!genState}
                           style={{
                             flex: 1, padding: '6px 8px', borderRadius: 7,
-                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
-                            background: 'transparent',
-                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(255,255,255,0.05)',
+                            color: 'rgba(255,255,255,0.6)',
                             fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
-                            opacity: genState && genState !== 'questions' ? 0.4 : 1,
+                            opacity: genState && genState !== 'questions' ? 0.35 : 1,
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                            transition: 'opacity 0.15s',
+                            transition: 'opacity 0.15s, background 0.15s',
                           }}
                         >
                           {genState === 'questions' ? '⟳' : '＋'}
-                          {nodeQCount > 0 ? `Preguntas (${nodeQCount})` : 'Preguntas'}
+                          {nodeQCount > 0 ? `Quiz (${nodeQCount})` : 'Quiz'}
                         </button>
                       </div>
 
@@ -798,21 +801,18 @@ export default function ConceptMapMode({ summary }) {
                       <button
                         onClick={e => { e.stopPropagation(); toggleMastered(node.id); }}
                         style={{
-                          marginTop: 12,
+                          marginTop: 8,
                           width: '100%',
                           padding: '7px 10px',
                           borderRadius: 7,
-                          border: `1.5px solid ${isMastered ? '#7BAE7F' : 'var(--soft-grey)'}`,
-                          background: isMastered ? '#eaf4eb' : 'transparent',
-                          color: isMastered ? '#2d6a33' : 'var(--text-light)',
-                          fontSize: 11,
+                          border: `1px solid ${isMastered ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                          background: isMastered ? 'rgba(74,222,128,0.1)' : 'transparent',
+                          color: isMastered ? '#4ade80' : 'rgba(255,255,255,0.35)',
+                          fontSize: 10.5,
                           fontWeight: 500,
                           cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 5,
+                          transition: 'all 0.25s',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                         }}
                       >
                         {isMastered ? '✓ Dominado' : 'Marcar como dominado'}
@@ -836,8 +836,8 @@ export default function ConceptMapMode({ summary }) {
         {/* Fullscreen escape hint */}
         {isFullscreen && (
           <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 100, pointerEvents: 'none' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--ghost-white)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--whisper-grey)', opacity: 0.7 }}>
-              Toca ✕ para salir · pellizca para zoom · arrastrá para mover
+            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.35)', background: 'rgba(20,20,28,0.75)', padding: '4px 14px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}>
+              Pellizca · arrastrá · ⛶ salir
             </span>
           </div>
         )}
@@ -845,23 +845,17 @@ export default function ConceptMapMode({ summary }) {
 
       {/* Legend (only when not fullscreen) */}
       {!isFullscreen && (
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           {[
-            { color: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', label: 'Concepto principal' },
-            { color: 'var(--driftwood)', label: 'Subtema', border: true },
-            { color: 'var(--whisper-grey)', label: 'Detalle', border: true },
-          ].map(({ color, label, border }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: border ? 'transparent' : color, border: border ? `2px solid ${color}` : 'none' }} />
-              <span style={{ fontSize: 11, color: 'var(--text-light)' }}>{label}</span>
+            { bg: 'rgba(140,100,200,0.5)', label: 'Principal' },
+            { bg: 'rgba(255,255,255,0.15)', label: 'Subtema' },
+            { bg: 'rgba(255,255,255,0.08)', label: 'Detalle' },
+          ].map(({ bg, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: bg, border: '1px solid rgba(255,255,255,0.12)' }} />
+              <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>{label}</span>
             </div>
           ))}
-          {images.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11 }}>🖼</span>
-              <span style={{ fontSize: 11, color: 'var(--text-light)' }}>Nodos con imagen del resumen</span>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -871,7 +865,7 @@ export default function ConceptMapMode({ summary }) {
     return ReactDOM.createPortal(
       <div style={{
         position: 'fixed', inset: 0, zIndex: 99999,
-        background: 'var(--pale-mist)',
+        background: '#09090c',
         display: 'flex', flexDirection: 'column',
         padding: '10px',
       }}>
@@ -886,9 +880,9 @@ export default function ConceptMapMode({ summary }) {
 
 const toolBtnStyle = {
   width: 28, height: 28, borderRadius: 7,
-  border: '1px solid var(--soft-grey)',
-  background: 'var(--ghost-white)',
-  color: 'var(--text-dark)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  background: 'rgba(255,255,255,0.06)',
+  color: 'rgba(255,255,255,0.7)',
   fontSize: 15,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer',
@@ -897,12 +891,13 @@ const toolBtnStyle = {
 
 const overlayBtnStyle = {
   width: 38, height: 38, borderRadius: 10,
-  background: 'var(--ghost-white)',
-  border: '1px solid var(--whisper-grey)',
-  color: 'var(--text-dark)',
+  background: 'rgba(22,22,30,0.9)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  color: 'rgba(255,255,255,0.8)',
   fontSize: 20, fontWeight: 300,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer',
-  boxShadow: '0 2px 12px rgba(0,0,0,0.13)',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+  backdropFilter: 'blur(12px)',
   transition: 'transform 0.12s ease, box-shadow 0.15s ease',
 };
