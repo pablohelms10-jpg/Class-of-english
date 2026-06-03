@@ -32,7 +32,7 @@ export default function Layout({ children }) {
           style={{ display: 'flex', alignItems: 'center', gap: 10 }}
         >
           <MilaLogo size={36} dark={darkMode} noAnimate={true} />
-          <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-dark)', letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>MILA</span>
+          <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-dark)', fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>MILA</span>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
