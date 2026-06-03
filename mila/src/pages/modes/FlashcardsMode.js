@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMila } from '../../context/MilaContext';
 import { generateFlashcards } from '../../utils/parseContent';
-import { generateFlashcardsAI } from '../../utils/aiService';
+import { generateFlashcardsAI, assignImagesToNodes } from '../../utils/aiService';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { StarIcon, BookIcon, DocumentIcon, FlashcardIcon } from '../../components/Icons';
 
@@ -38,7 +38,20 @@ export default function FlashcardsMode({ summary }) {
   const images = summary?.images || [];
 
   useEffect(() => {
-    if (cached && cached.length > 0) return;
+    if (cached && cached.length > 0) {
+      // Auto-assign images to existing cards that are missing imageIndex
+      if (images.length > 0 && cached.every(c => c.imageIndex === undefined)) {
+        const nodes = cached.map(c => ({ id: c.id, label: c.front, summary: c.back }));
+        assignImagesToNodes(nodes, images)
+          .then(withImages => {
+            const upgraded = cached.map((c, i) => ({ ...c, imageIndex: withImages[i]?.imageIndex ?? null }));
+            setCards(upgraded);
+            updateSummary(summary.id, { flashcards: upgraded });
+          })
+          .catch(() => {}); // keep cards as-is if matching fails
+      }
+      return;
+    }
     setLoading(true);
     generateFlashcardsAI(text, [], images)
       .then(({ cards: generated, allCovered: done }) => {

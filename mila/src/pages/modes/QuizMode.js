@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMila } from '../../context/MilaContext';
 import { generateQuestions } from '../../utils/parseContent';
-import { generateQuestionsAI } from '../../utils/aiService';
+import { generateQuestionsAI, assignImagesToNodes } from '../../utils/aiService';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { TrophyIcon, BookIcon, QuizIcon } from '../../components/Icons';
 
@@ -24,7 +24,20 @@ export default function QuizMode({ summary }) {
   const images = summary?.images || [];
 
   useEffect(() => {
-    if (cached && cached.length > 0) return;
+    if (cached && cached.length > 0) {
+      // Auto-assign images to existing questions missing imageIndex
+      if (images.length > 0 && cached.every(q => q.imageIndex === undefined)) {
+        const nodes = cached.map(q => ({ id: q.id, label: q.question, summary: q.explanation || '' }));
+        assignImagesToNodes(nodes, images)
+          .then(withImages => {
+            const upgraded = cached.map((q, i) => ({ ...q, imageIndex: withImages[i]?.imageIndex ?? null }));
+            setQuestions(upgraded);
+            updateSummary(summary.id, { questions: upgraded });
+          })
+          .catch(() => {});
+      }
+      return;
+    }
     setLoading(true);
     generateQuestionsAI(text, [], images)
       .then(({ questions: generated, allCovered: done }) => {
