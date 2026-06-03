@@ -19,6 +19,35 @@ export function extractImagesFromFile(file) {
   });
 }
 
+export async function extractFromPDF(file) {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let fullText = '';
+  const images = [];
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(item => item.str).join(' ');
+    fullText += pageText + '\n\n';
+
+    const canvas = document.createElement('canvas');
+    const viewport = page.getViewport({ scale: 1.5 });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    images.push({ src: canvas.toDataURL('image/jpeg', 0.85), name: `${file.name} — página ${pageNum}` });
+  }
+
+  return { text: fullText, images };
+}
+
 export function generateFlashcards(text) {
   const sentences = text
     .split(/[.!?]+/)

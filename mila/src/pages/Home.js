@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useMila } from '../context/MilaContext';
-import { extractTextFromFile, extractImagesFromFile } from '../utils/parseContent';
+import { extractTextFromFile, extractImagesFromFile, extractFromPDF } from '../utils/parseContent';
 
 const MODES = [
   { id: 'flashcards', emoji: '🃏', label: 'Flashcards', desc: 'Tarjetas de memorización interactivas' },
@@ -14,6 +14,7 @@ export default function Home() {
   const fileRef = useRef();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
   const [title, setTitle] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
@@ -25,10 +26,17 @@ export default function Home() {
       const images = [];
 
       for (const file of files) {
-        if (file.type.startsWith('image/')) {
+        if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          setLoadingMsg(`Leyendo PDF: ${file.name}…`);
+          const result = await extractFromPDF(file);
+          text += result.text + '\n\n';
+          images.push(...result.images);
+        } else if (file.type.startsWith('image/')) {
+          setLoadingMsg(`Procesando imagen: ${file.name}…`);
           const imgs = await extractImagesFromFile(file);
           images.push(...imgs);
         } else if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+          setLoadingMsg(`Leyendo texto: ${file.name}…`);
           const content = await extractTextFromFile(file);
           text += content + '\n\n';
         }
@@ -44,6 +52,7 @@ export default function Home() {
       setActiveSummary(summary);
     } finally {
       setLoading(false);
+      setLoadingMsg('');
     }
   }
 
@@ -131,7 +140,7 @@ export default function Home() {
           }}
         >
           {loading ? (
-            <LoadingDots />
+            <LoadingDots message={loadingMsg} />
           ) : (
             <>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
@@ -139,7 +148,7 @@ export default function Home() {
                 Arrastra tu resumen aquí
               </p>
               <p style={{ fontSize: 12, color: 'var(--text-light)' }}>
-                .txt, .md o imágenes — o escribe directamente
+                PDF, .txt, .md, JPG, PNG — o escribe directamente
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
                 <PillButton onClick={e => { e.stopPropagation(); fileRef.current.click(); }} label="Subir archivo" />
@@ -149,7 +158,7 @@ export default function Home() {
           )}
         </div>
 
-        <input ref={fileRef} type="file" hidden multiple accept=".txt,.md,image/*" onChange={e => processFiles([...e.target.files])} />
+        <input ref={fileRef} type="file" hidden multiple accept=".txt,.md,.pdf,image/jpeg,image/png,image/webp" onChange={e => processFiles([...e.target.files])} />
 
         {showTextInput && (
           <div style={{ marginTop: 16 }}>
@@ -330,18 +339,21 @@ function PillButton({ label, onClick, secondary }) {
   );
 }
 
-function LoadingDots() {
+function LoadingDots({ message }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '20px 0' }}>
-      {[0, 1, 2].map(i => (
-        <div key={i} style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: 'var(--driftwood)',
-          animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-        }} />
-      ))}
+    <div style={{ padding: '20px 0', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--driftwood)',
+            animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+          }} />
+        ))}
+      </div>
+      {message && <p style={{ fontSize: 12, color: 'var(--text-light)' }}>{message}</p>}
       <style>{`@keyframes pulse { 0%,80%,100%{opacity:0.3;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }`}</style>
     </div>
   );
