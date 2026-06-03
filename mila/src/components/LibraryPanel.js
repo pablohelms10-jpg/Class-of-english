@@ -18,6 +18,7 @@ export default function LibraryPanel({ open, onClose }) {
   const [newFolderMode, setNewFolderMode] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [folders, setFolders] = useState([]);
+  const [dragOverFolder, setDragOverFolder] = useState(null);
 
   // Build grouped object — includes empty folders too
   const grouped = summaries.reduce((acc, s) => {
@@ -161,7 +162,22 @@ export default function LibraryPanel({ open, onClose }) {
             <div key={subjectKey} style={{ marginBottom: 4 }}>
 
               {/* Folder row */}
-              <div style={{ display: 'flex', alignItems: 'center', padding: '8px 16px', gap: 6 }}>
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOverFolder(subjectKey); }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverFolder(null); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  const summaryId = parseInt(e.dataTransfer.getData('summaryId'));
+                  if (summaryId) updateSummary(summaryId, { subject: subjectKey });
+                  setDragOverFolder(null);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', padding: '8px 16px', gap: 6,
+                  borderRadius: 8, transition: 'background 0.15s',
+                  background: dragOverFolder === subjectKey ? 'rgba(193,165,124,0.18)' : 'transparent',
+                  outline: dragOverFolder === subjectKey ? '2px dashed var(--driftwood)' : 'none',
+                }}
+              >
                 <button onClick={() => toggleSubject(subjectKey)} style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
                   <span style={{ fontSize: 10, color: 'var(--text-light)', width: 10 }}>{collapsedSubjects[subjectKey] ? '▶' : '▼'}</span>
                   <FolderIcon size={16} color="var(--driftwood)" />
@@ -191,7 +207,12 @@ export default function LibraryPanel({ open, onClose }) {
 
               {/* Summary items */}
               {!collapsedSubjects[subjectKey] && grouped[subjectKey].map(s => (
-                <div key={s.id} style={{ margin: '2px 12px 2px 32px' }}>
+                <div
+                  key={s.id}
+                  draggable
+                  onDragStart={e => { e.dataTransfer.setData('summaryId', s.id.toString()); e.dataTransfer.effectAllowed = 'move'; }}
+                  style={{ margin: '2px 12px 2px 32px', cursor: 'grab' }}
+                >
                   <SummaryItem
                     summary={s}
                     isEditing={editingSummaryId === s.id}

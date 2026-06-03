@@ -7,8 +7,7 @@ function smartSample(text, maxLen = 4000) {
   return text.slice(0, third) + '\n...\n' + text.slice(mid - Math.floor(third / 2), mid + Math.floor(third / 2)) + '\n...\n' + text.slice(-third);
 }
 
-// Resize image to max 512px before sending to API
-async function compressImage(dataUrl, maxPx = 512) {
+async function compressImage(dataUrl, maxPx = 480) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
@@ -17,22 +16,35 @@ async function compressImage(dataUrl, maxPx = 512) {
       canvas.width = Math.round(img.width * ratio);
       canvas.height = Math.round(img.height * ratio);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.75));
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
-    img.onerror = () => resolve(dataUrl);
+    img.onerror = () => resolve(null);
     img.src = dataUrl;
+  });
+}
+
+// Pick images spread evenly across the array
+function spreadImages(images, count = 6) {
+  if (!images || images.length === 0) return [];
+  if (images.length <= count) return images.map((img, i) => ({ ...img, _origIdx: i }));
+  const step = (images.length - 1) / (count - 1);
+  return Array.from({ length: count }, (_, i) => {
+    const idx = Math.round(i * step);
+    return { ...images[idx], _origIdx: idx };
   });
 }
 
 async function buildContent(prompt, images = []) {
   const content = [];
-  for (let i = 0; i < Math.min(images.length, 4); i++) {
+  for (const img of images) {
     try {
-      const compressed = await compressImage(images[i].src);
+      const compressed = await compressImage(img.src);
+      if (!compressed) continue;
       const mediaType = compressed.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
       const data = compressed.replace(/^data:[^;]+;base64,/, '');
+      if (data.length > 4_000_000) continue; // skip if still too big
       content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data } });
-    } catch { /* skip broken image */ }
+    } catch { /* skip */ }
   }
   content.push({ type: 'text', text: prompt });
   return content;
@@ -63,18 +75,43 @@ async function askClaude(prompt, images = []) {
   return data.content[0].text;
 }
 
+// Separate step: match images to cards/questions via vision
+async function matchImages(topics, images) {
+  if (!images || images.length === 0) return topics.map(() => null);
+  const selected = spreadImages(images, 6);
+
+  const prompt = `Tenés ${selected.length} imágenes anatómicas numeradas y ${topics.length} temas.
+Para cada tema, indicá cuál imagen (0 a ${selected.length - 1}) lo ilustra mejor. Si ninguna es relevante, ponés null.
+
+TEMAS:
+${topics.map((t, i) => `${i}: "${t}"`).join('\n')}
+
+Responde SOLO con JSON sin texto extra:
+{"matches": [0, null, 1, null, 2, null, 0, null, null, null]}
+(exactamente ${topics.length} valores en el array, en orden)`;
+
+  try {
+    const raw = await askClaude(prompt, selected);
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) return topics.map(() => null);
+    const { matches } = JSON.parse(jsonMatch[0]);
+    return (matches || []).map(idx => {
+      if (idx == null || idx === 'null') return null;
+      const n = parseInt(idx);
+      return isNaN(n) ? null : (selected[n]?._origIdx ?? n);
+    });
+  } catch {
+    return topics.map(() => null);
+  }
+}
+
 // Returns { cards, allCovered }
 export async function generateFlashcardsAI(text, existing = [], images = []) {
-  const hasImages = images.length > 0;
   const existingList = existing.length > 0
     ? `\nFLASHCARDS YA CREADAS (NO repetir):\n${existing.map(c => `- ${c.front}`).join('\n')}\n`
     : '';
 
-  const imageInstructions = hasImages
-    ? `\nTenés ${Math.min(images.length, 4)} imágenes del resumen (índices 0 a ${Math.min(images.length, 4) - 1}). Si una imagen ilustra directamente la respuesta de una flashcard, incluye "imageIndex": N con el índice correspondiente. Si no hay imagen relevante, omite imageIndex.\n`
-    : '';
-
-  const prompt = `Eres un profesor de medicina. Genera 10 flashcards NUEVAS del resumen.${existingList}${imageInstructions}
+  const prompt = `Eres un profesor de medicina. Genera 10 flashcards NUEVAS del resumen.${existingList}
 RESUMEN:
 ${smartSample(text)}
 
@@ -83,36 +120,39 @@ Si ya se cubrieron TODOS los temas, responde exactamente: {"allCovered": true}
 Si quedan temas, responde SOLO con JSON array:
 [
   {
-    "front": "¿Pregunta específica?",
+    "front": "¿Pregunta específica y clara?",
     "back": "Respuesta concisa y precisa",
-    "context": "Frase de apoyo del texto"${hasImages ? ',\n    "imageIndex": null' : ''}
+    "context": "Frase del texto que respalda esto"
   }
 ]
 
-Reglas: NO repetir temas ya cubiertos. Preguntas sobre definiciones, funciones, relaciones anatómicas.`;
+Reglas: NO repetir temas ya cubiertos. Preguntas sobre definiciones, funciones, relaciones anatómicas. Máximo 10.`;
 
-  const raw = await askClaude(prompt, images);
+  const raw = await askClaude(prompt);
   if (raw.includes('"allCovered": true') || raw.includes('"allCovered":true')) {
     return { cards: [], allCovered: true };
   }
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  const cards = JSON.parse(match[0]).map((c, i) => ({ ...c, id: Date.now() + i }));
+  let cards = JSON.parse(match[0]).map((c, i) => ({ ...c, id: Date.now() + i }));
+
+  // Separate vision pass to assign images
+  if (images.length > 0) {
+    const topics = cards.map(c => c.front);
+    const imageMatches = await matchImages(topics, images);
+    cards = cards.map((c, i) => ({ ...c, imageIndex: imageMatches[i] ?? null }));
+  }
+
   return { cards, allCovered: false };
 }
 
 // Returns { questions, allCovered }
 export async function generateQuestionsAI(text, existing = [], images = []) {
-  const hasImages = images.length > 0;
   const existingList = existing.length > 0
     ? `\nPREGUNTAS YA CREADAS (NO repetir):\n${existing.map(q => `- ${q.question}`).join('\n')}\n`
     : '';
 
-  const imageInstructions = hasImages
-    ? `\nTenés ${Math.min(images.length, 4)} imágenes del resumen (índices 0 a ${Math.min(images.length, 4) - 1}). Si una imagen ilustra la pregunta o ayuda a entender la respuesta, incluye "imageIndex": N. Si no, omite imageIndex.\n`
-    : '';
-
-  const prompt = `Eres un profesor de medicina. Genera 8 preguntas de opción múltiple NUEVAS.${existingList}${imageInstructions}
+  const prompt = `Eres un profesor de medicina. Genera 8 preguntas de opción múltiple NUEVAS.${existingList}
 RESUMEN:
 ${smartSample(text)}
 
@@ -124,68 +164,61 @@ Si quedan temas, responde SOLO con JSON array:
     "question": "Pregunta clara",
     "options": ["A", "B", "C", "D"],
     "correct": "Opción correcta exacta",
-    "explanation": "Por qué es correcta"${hasImages ? ',\n    "imageIndex": null' : ''}
+    "explanation": "Por qué es correcta"
   }
 ]
 
-Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles.`;
+Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 8.`;
 
-  const raw = await askClaude(prompt, images);
+  const raw = await askClaude(prompt);
   if (raw.includes('"allCovered": true') || raw.includes('"allCovered":true')) {
     return { questions: [], allCovered: true };
   }
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  const questions = JSON.parse(match[0]).map((q, i) => ({ ...q, id: Date.now() + i }));
+  let questions = JSON.parse(match[0]).map((q, i) => ({ ...q, id: Date.now() + i }));
+
+  // Separate vision pass to assign images
+  if (images.length > 0) {
+    const topics = questions.map(q => q.question);
+    const imageMatches = await matchImages(topics, images);
+    questions = questions.map((q, i) => ({ ...q, imageIndex: imageMatches[i] ?? null }));
+  }
+
   return { questions, allCovered: false };
 }
 
 export async function generateConceptMapAI(text, images = []) {
   const hasImages = images.length > 0;
-  const imageInstructions = hasImages
-    ? `\nTenés ${Math.min(images.length, 4)} imágenes (índices 0-${Math.min(images.length, 4) - 1}). Si una imagen ilustra un nodo, incluye "imageIndex": N en ese nodo.\n`
+  const imageNote = hasImages
+    ? `\nTenés ${Math.min(images.length, 4)} imágenes (índices 0-${Math.min(images.length, 4) - 1}). Asigna "imageIndex" al nodo más relevante para cada imagen, null si no aplica.\n`
     : '';
 
-  const prompt = `Eres un profesor de medicina. Crea un mapa conceptual RICO Y DETALLADO.${imageInstructions}
+  const prompt = `Eres un profesor de medicina. Crea un mapa conceptual RICO Y DETALLADO.${imageNote}
 RESUMEN:
 ${smartSample(text)}
 
-Responde SOLO con JSON válido. Genera 10-14 nodos con contenido profundo:
+Responde SOLO con JSON válido. Genera 10-14 nodos:
 {
   "title": "Tema principal",
   "nodes": [
     {
-      "id": 0,
-      "label": "Título corto (2-4 palabras)",
-      "type": "main",
-      "summary": "Una línea que describe el concepto",
-      "content": "Explicación completa en 2-4 oraciones con los puntos más importantes del tema",
+      "id": 0, "label": "Título (2-4 palabras)", "type": "main",
+      "summary": "Una línea resumen",
+      "content": "Explicación de 2-4 oraciones con puntos importantes",
       "bullets": ["Dato clave 1", "Dato clave 2", "Dato clave 3"],
       "imageIndex": null,
       "x": 600, "y": 80
-    },
-    {
-      "id": 1,
-      "label": "Subtema 1",
-      "type": "sub",
-      "summary": "Una línea resumen",
-      "content": "Explicación detallada del subtema...",
-      "bullets": ["Punto 1", "Punto 2"],
-      "imageIndex": null,
-      "x": 200, "y": 260
     }
   ],
-  "edges": [
-    {"from": 0, "to": 1, "label": "contiene"},
-    {"from": 0, "to": 2, "label": "incluye"}
-  ]
+  "edges": [{"from": 0, "to": 1, "label": "contiene"}]
 }
 
-Tipos: "main" (1 nodo central), "sub" (3-5 subtemas), "detail" (5-8 detalles).
-Distribuye nodos en un espacio de 1200x900px. Nodo principal centrado arriba.
-Contenido debe ser educativo, preciso y con terminología médica correcta.`;
+Tipos: "main" (1 nodo central en x≈600,y≈80), "sub" (3-5 subtemas), "detail" (5-8 detalles).
+Distribuye en espacio 1200x900px. Contenido educativo con terminología médica.`;
 
-  const raw = await askClaude(prompt, images);
+  const selected = spreadImages(images, 4);
+  const raw = await askClaude(prompt, selected.length > 0 ? selected : []);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Respuesta inválida de la IA');
   return JSON.parse(match[0]);
