@@ -439,36 +439,6 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
         </div>
       )}
 
-      {/* Mode shortcut icons */}
-      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--soft-grey)', display: 'flex', gap: 4 }}>
-        {MODES.filter(m => m.id !== 'images' || (summary.images || []).length > 0).map(m => (
-          <button
-            key={m.id}
-            onClick={e => { e.stopPropagation(); onOpenMode(m.id); }}
-            title={m.label}
-            style={{
-              flex: 1,
-              padding: '7px 4px',
-              borderRadius: 8,
-              border: '1px solid var(--whisper-grey)',
-              background: 'var(--ghost-white)',
-              color: 'var(--text-mid)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; e.currentTarget.style.borderColor = 'var(--driftwood)'; e.currentTarget.style.color = 'var(--text-dark)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--ghost-white)'; e.currentTarget.style.borderColor = 'var(--whisper-grey)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
-          >
-            <m.Icon size={16} color="currentColor" />
-            <span style={{ fontSize: 9, letterSpacing: '0.2px', whiteSpace: 'nowrap' }}>{m.label.split(' ')[0]}</span>
-          </button>
-        ))}
-      </div>
-
       {/* Edit button */}
       {hovered && (
         <button
