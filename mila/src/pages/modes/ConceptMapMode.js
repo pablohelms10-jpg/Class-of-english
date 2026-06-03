@@ -125,12 +125,12 @@ export default function ConceptMapMode({ summary }) {
     let lastTouches = null;
 
     function handleTouchStart(e) {
-      e.preventDefault();
+      // Don't preventDefault here — single-tap must still fire onClick (expand nodes)
       lastTouches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
     }
 
     function handleTouchMove(e) {
-      e.preventDefault();
+      e.preventDefault(); // safe here: prevents page scroll/zoom during any drag gesture
       const touches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
       if (!lastTouches || lastTouches.length !== touches.length) {
         lastTouches = touches;

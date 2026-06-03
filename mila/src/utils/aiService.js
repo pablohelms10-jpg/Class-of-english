@@ -208,6 +208,13 @@ Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 
   return { questions, allCovered: false };
 }
 
+// Immediately distribute images across items without any API call
+export function quickAssignImages(count, images) {
+  if (!images || images.length === 0) return Array(count).fill(null);
+  const selected = spreadImages(images, Math.min(images.length, 6));
+  return distributeImages(count, selected);
+}
+
 // Assigns images to concept map nodes via vision
 export async function assignImagesToNodes(nodes, images) {
   if (!images || images.length === 0) return nodes;

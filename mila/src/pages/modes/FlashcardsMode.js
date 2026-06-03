@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMila } from '../../context/MilaContext';
 import { generateFlashcards } from '../../utils/parseContent';
-import { generateFlashcardsAI, assignImagesToNodes } from '../../utils/aiService';
+import { generateFlashcardsAI, assignImagesToNodes, quickAssignImages } from '../../utils/aiService';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { StarIcon, BookIcon, DocumentIcon, FlashcardIcon } from '../../components/Icons';
 
@@ -39,16 +39,21 @@ export default function FlashcardsMode({ summary }) {
 
   useEffect(() => {
     if (cached && cached.length > 0) {
-      // Auto-assign images to existing cards that are missing imageIndex
       if (images.length > 0 && !cached.some(c => c.imageIndex != null)) {
+        // Step 1: immediately distribute images so they show at once
+        const quickIndices = quickAssignImages(cached.length, images);
+        const quick = cached.map((c, i) => ({ ...c, imageIndex: quickIndices[i] ?? null }));
+        setCards(quick);
+        updateSummary(summary.id, { flashcards: quick });
+        // Step 2: async AI matching to improve assignments in background
         const nodes = cached.map(c => ({ id: c.id, label: c.front, summary: c.back }));
         assignImagesToNodes(nodes, images)
           .then(withImages => {
-            const upgraded = cached.map((c, i) => ({ ...c, imageIndex: withImages[i]?.imageIndex ?? null }));
+            const upgraded = quick.map((c, i) => ({ ...c, imageIndex: withImages[i]?.imageIndex ?? c.imageIndex }));
             setCards(upgraded);
             updateSummary(summary.id, { flashcards: upgraded });
           })
-          .catch(() => {}); // keep cards as-is if matching fails
+          .catch(() => {});
       }
       return;
     }
