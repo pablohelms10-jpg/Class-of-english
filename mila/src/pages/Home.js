@@ -210,7 +210,7 @@ export default function Home() {
             padding: '48px 32px',
             textAlign: 'center',
             cursor: 'pointer',
-            background: dragging ? 'rgba(193,183,175,0.08)' : 'rgba(255,255,255,0.5)',
+            background: dragging ? 'rgba(193,183,175,0.08)' : 'var(--pale-mist)',
             transition: 'var(--transition)',
           }}
         >
@@ -293,8 +293,8 @@ export default function Home() {
               <div key={m.id} style={{
                 padding: '20px 16px',
                 borderRadius: 'var(--radius-md)',
-                background: 'rgba(255,255,255,0.7)',
-                border: '1px solid var(--soft-grey)',
+                background: 'var(--pale-mist)',
+                border: '1px solid var(--whisper-grey)',
               }}>
                 <div style={{ fontSize: 24, marginBottom: 8 }}>{m.emoji}</div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>{m.label}</div>
@@ -437,8 +437,8 @@ function SummaryCard({ summary, onOpen, onDelete }) {
       style={{
         padding: '20px',
         borderRadius: 'var(--radius-md)',
-        background: 'rgba(255,255,255,0.8)',
-        border: `1.5px solid ${hovered ? 'var(--feather-touch)' : 'var(--soft-grey)'}`,
+        background: 'var(--pale-mist)',
+        border: `1.5px solid ${hovered ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
         cursor: 'pointer',
         transition: 'var(--transition)',
         boxShadow: hovered ? 'var(--shadow-card)' : 'var(--shadow-soft)',

@@ -21,45 +21,47 @@ export default function SummaryDetail() {
 
   const hasFlashcards = (activeSummary.flashcards || []).length > 0;
   const hasQuestions = (activeSummary.questions || []).length > 0;
+  const hasContent = hasFlashcards || hasQuestions;
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: 26, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6, letterSpacing: '-0.5px' }}>
-              {activeSummary.title}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--text-light)' }}>
-              {activeSummary.text ? `${activeSummary.text.split(/\s+/).filter(Boolean).length} palabras` : ''}
-              {activeSummary.images?.length > 0 ? ` · ${activeSummary.images.length} imagen(es)` : ''}
-              {hasFlashcards ? ` · ${activeSummary.flashcards.length} flashcards` : ''}
-              {hasQuestions ? ` · ${activeSummary.questions.length} preguntas` : ''}
-            </p>
-          </div>
-          {(hasFlashcards || hasQuestions) && (
-            <button
-              onClick={() => setEditorOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '9px 16px', borderRadius: 10,
-                border: '1.5px solid var(--soft-grey)',
-                background: 'transparent', color: 'var(--text-mid)',
-                fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
-                flexShrink: 0,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; e.currentTarget.style.color = 'var(--text-dark)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-mid)'; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 10L10 2l2 2L4 12H2v-2z" fill="currentColor"/>
-              </svg>
-              Ver y editar contenido
-            </button>
-          )}
+      {/* Summary header */}
+      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 26, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6, letterSpacing: '-0.5px' }}>
+            {activeSummary.title}
+          </h2>
+          <p style={{ fontSize: 13, color: 'var(--text-light)' }}>
+            {activeSummary.text ? `${activeSummary.text.split(/\s+/).filter(Boolean).length} palabras` : ''}
+            {activeSummary.images?.length > 0 ? ` · ${activeSummary.images.length} imagen(es)` : ''}
+            {hasFlashcards ? ` · ${activeSummary.flashcards.length} flashcards` : ''}
+            {hasQuestions ? ` · ${activeSummary.questions.length} preguntas` : ''}
+          </p>
         </div>
+
+        {/* Edit icon button — always visible so user can add content manually too */}
+        <button
+          onClick={() => setEditorOpen(true)}
+          title="Ver y editar flashcards y preguntas"
+          style={{
+            flexShrink: 0,
+            width: 36, height: 36, borderRadius: 10,
+            border: `1.5px solid ${hasContent ? 'var(--driftwood)' : 'var(--soft-grey)'}`,
+            background: 'transparent',
+            color: hasContent ? 'var(--driftwood)' : 'var(--text-light)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <path d="M11.5 1.5a1.5 1.5 0 012.12 2.12L5 12.24 2 13l.76-3L11.5 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
 
+      {/* Mode tabs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 32, flexWrap: 'wrap' }}>
         {MODES.map(m => {
           const disabled = m.id === 'images' && (activeSummary.images || []).length === 0;
@@ -71,12 +73,14 @@ export default function SummaryDetail() {
               disabled={disabled}
               style={{
                 padding: '12px 22px', borderRadius: 'var(--radius-lg)',
-                background: active ? 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))' : 'rgba(255,255,255,0.7)',
-                border: `1.5px solid ${active ? 'transparent' : 'var(--soft-grey)'}`,
-                color: active ? 'white' : disabled ? 'var(--text-light)' : 'var(--text-mid)',
+                background: active
+                  ? 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))'
+                  : 'var(--pale-mist)',
+                border: `1.5px solid ${active ? 'transparent' : 'var(--whisper-grey)'}`,
+                color: active ? 'white' : disabled ? 'var(--text-light)' : 'var(--text-dark)',
                 fontSize: 14, fontWeight: active ? 500 : 400,
                 cursor: disabled ? 'not-allowed' : 'pointer',
-                transition: 'var(--transition)', opacity: disabled ? 0.5 : 1,
+                transition: 'var(--transition)', opacity: disabled ? 0.4 : 1,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}
             >
@@ -124,8 +128,8 @@ function ModeCard({ mode, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '28px 20px', borderRadius: 'var(--radius-md)',
-        background: hovered ? 'linear-gradient(135deg, rgba(176,168,164,0.15), rgba(193,183,175,0.1))' : 'rgba(255,255,255,0.7)',
-        border: `1.5px solid ${hovered ? 'var(--feather-touch)' : 'var(--soft-grey)'}`,
+        background: hovered ? 'var(--soft-grey)' : 'var(--pale-mist)',
+        border: `1.5px solid ${hovered ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
         cursor: 'pointer', transition: 'var(--transition)',
         boxShadow: hovered ? 'var(--shadow-card)' : 'none',
         transform: hovered ? 'translateY(-2px)' : 'none',
