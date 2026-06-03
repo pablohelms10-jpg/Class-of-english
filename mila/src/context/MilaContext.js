@@ -13,7 +13,7 @@ export function MilaProvider({ children }) {
   const [summaries, setSummaries] = useState(() => loadFromStorage('mila_summaries', []));
   const [activeSummary, setActiveSummary] = useState(null);
   const [activeMode, setActiveMode] = useState(null);
-  const [darkMode, setDarkMode] = useState(() => loadFromStorage('mila_dark', false));
+  const [darkMode, setDarkMode] = useState(() => loadFromStorage('mila_dark', true));
 
   useEffect(() => {
     localStorage.setItem('mila_summaries', JSON.stringify(summaries));
