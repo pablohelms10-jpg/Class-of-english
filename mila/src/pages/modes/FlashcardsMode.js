@@ -228,7 +228,7 @@ export default function FlashcardsMode({ summary }) {
               <img
                 src={images[card.imageIndex].src}
                 alt=""
-                style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 10, objectFit: 'contain', background: 'rgba(255,255,255,0.15)', marginTop: 4 }}
+                style={{ width: '100%', maxHeight: 320, borderRadius: 10, objectFit: 'cover', background: 'rgba(255,255,255,0.15)', marginTop: 12, display: 'block' }}
               />
             )}
           </div>

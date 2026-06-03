@@ -5,7 +5,7 @@ import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
 
-const NODE_W = 240;
+const NODE_W = 270;
 const CANVAS_W = 1400;
 const CANVAS_H = 1000;
 
@@ -424,7 +424,7 @@ export default function ConceptMapMode({ summary }) {
                       </ul>
                     )}
                     {img && (
-                      <img src={img.src} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'contain', maxHeight: 180, background: 'rgba(0,0,0,0.05)', marginTop: 4 }} />
+                      <img src={img.src} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover', maxHeight: 260, background: 'rgba(0,0,0,0.05)', marginTop: 6, display: 'block' }} />
                     )}
                   </div>
                 )}

@@ -224,7 +224,7 @@ export default function QuizMode({ summary }) {
       <div style={{ padding: '28px 32px', borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)' }}>
         <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7, marginBottom: q.imageIndex != null && images[q.imageIndex] ? 16 : 0 }}>{q.question}</p>
         {q.imageIndex != null && images[q.imageIndex] && (
-          <img src={images[q.imageIndex].src} alt="" style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 10, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+          <img src={images[q.imageIndex].src} alt="" style={{ width: '100%', maxHeight: 320, borderRadius: 10, objectFit: 'cover', display: 'block', marginTop: 12 }} />
         )}
       </div>
 
