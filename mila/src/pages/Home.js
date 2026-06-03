@@ -16,12 +16,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [pdfProgress, setPdfProgress] = useState(null);
+  const [error, setError] = useState('');
   const [title, setTitle] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
 
   async function processFiles(files) {
     setLoading(true);
+    setError('');
     try {
       let text = '';
       const images = [];
@@ -59,6 +61,9 @@ export default function Home() {
       });
       setTitle('');
       setActiveSummary(summary);
+    } catch (err) {
+      console.error(err);
+      setError(`Error al procesar el archivo: ${err.message || 'intenta de nuevo'}`);
     } finally {
       setLoading(false);
       setLoadingMsg('');
@@ -169,6 +174,12 @@ export default function Home() {
         </div>
 
         <input ref={fileRef} type="file" hidden multiple accept=".txt,.md,.pdf,image/jpeg,image/png,image/webp" onChange={e => processFiles([...e.target.files])} />
+
+        {error && (
+          <div style={{ marginTop: 12, padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'rgba(176,168,164,0.15)', border: '1px solid var(--feather-touch)', fontSize: 13, color: 'var(--ash-plum)' }}>
+            ⚠️ {error}
+          </div>
+        )}
 
         {showTextInput && (
           <div style={{ marginTop: 16 }}>
