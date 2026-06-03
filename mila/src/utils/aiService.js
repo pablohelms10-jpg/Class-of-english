@@ -75,38 +75,42 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
   return data.content[0].text;
 }
 
-// Global image assignment: one API call assigns the best unique image to each topic.
-// Primary rule: read text labels written INSIDE each image and match literally.
+// Global image assignment via OCR-first matching.
+// Rule: text written IN the image is the ONLY valid signal.
+// Visual similarity must never override OCR text. null > wrong image.
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
-  // Up to 12 images spread evenly, keeping original indices
   const selected = spreadImages(images, Math.min(images.length, 12));
 
-  const prompt = `Sos un profesor de anatomía analizando diapositivas de un resumen médico.
-Tenés ${selected.length} imágenes (índices 0–${selected.length - 1}) y ${topics.length} conceptos.
+  const prompt = `Sos un sistema OCR especializado en diapositivas médicas. Tu única tarea es leer el texto impreso en cada imagen y compararlo con una lista de conceptos.
 
-CONCEPTOS:
+REGLA ABSOLUTA: El texto visible en la imagen es la ÚNICA señal válida para la asignación.
+- PROHIBIDO usar similitud visual, anatomía relacionada, o inferencia contextual.
+- Si la imagen no contiene texto que coincida con un concepto → null obligatorio.
+- "Relacionado" no es suficiente. Solo coincidencia textual exacta o casi exacta.
+
+CONCEPTOS (${topics.length} total):
 ${topics.map((t, i) => `${i}. "${t}"`).join('\n')}
 
-PASO 1 — LEER CADA IMAGEN:
-Para cada imagen, leé TODO el texto escrito en ella (títulos, etiquetas, flechas, leyendas, nombres anatómicos).
-Ese texto es la fuente de verdad más confiable.
+IMÁGENES (${selected.length} total, índices 0–${selected.length - 1}):
+Para cada imagen hacé esto:
+  A. Leé TODO el texto que aparezca: títulos, subtítulos, etiquetas, flechas, leyendas.
+  B. Buscá si ese texto nombra EXACTAMENTE uno de los conceptos de arriba.
+  C. Si sí → asignala a ese concepto. Si no → null.
 
-PASO 2 — ASIGNAR POR COINCIDENCIA EXACTA:
-- Si una imagen dice "Hueso Cigomático" → va al concepto "Hueso Cigomático" (no a otro hueso)
-- Si una imagen dice "Articulación Temporomandibular" → va a ese concepto exacto
-- Si el texto de la imagen NO coincide con ningún concepto → null
-- Si la imagen no tiene texto claro → usá el contenido visual, pero siendo muy estricto
-- NUNCA asignes una imagen a un concepto diferente al que nombra
+EJEMPLOS DE APLICACIÓN CORRECTA:
+- Imagen con texto "ARTICULACIÓN TEMPOROMANDIBULAR" → solo puede ir al concepto "Articulación Temporomandibular". Si ese concepto no existe en la lista → null.
+- Imagen con texto "Hueso Cigomático" → solo puede ir al concepto "Hueso Cigomático". NUNCA a "Articulación Temporomandibular" aunque sean vecinos anatómicos.
+- Imagen sin texto legible → null siempre.
+- Imagen con texto irrelevante (número de página, pie de foto genérico) → null.
 
-PASO 3 — UNICIDAD:
-- Cada imagen puede usarse como máximo UNA vez
-- Si dos conceptos reclaman la misma imagen, asignala solo al que coincide más exactamente
-- Si ninguna imagen corresponde a un concepto, usá null (es mejor null que una imagen incorrecta)
+UNICIDAD: cada imagen puede asignarse como máximo a UN concepto. Si dos conceptos coinciden con la misma imagen, elegí el más exacto. El otro recibe null.
 
-Respondé SOLO con JSON, exactamente ${topics.length} valores (índice numérico o null):
-{"assignments": [0, null, 2, 1, null]}`;
+Respondé SOLO con JSON válido, exactamente ${topics.length} valores:
+{"assignments": [0, null, 2, null, 1]}
+
+No incluyas explicaciones. Solo el JSON.`;
 
   try {
     const raw = await askClaude(prompt, selected);
@@ -114,15 +118,21 @@ Respondé SOLO con JSON, exactamente ${topics.length} valores (índice numérico
     if (!jsonMatch) throw new Error('no json');
     const parsed = JSON.parse(jsonMatch[0]);
     const assignments = parsed.assignments || [];
+
+    // Enforce uniqueness: if the same image index is used twice, keep only the first
+    const usedIndices = new Set();
     return topics.map((_, i) => {
       const si = assignments[i];
       if (si == null) return null;
       const idx = typeof si === 'number' ? si : parseInt(si);
       if (isNaN(idx) || idx < 0 || idx >= selected.length) return null;
+      if (usedIndices.has(idx)) return null;
+      usedIndices.add(idx);
       return selected[idx]?._origIdx ?? null;
     });
   } catch {
-    return distributeImages(topics.length, selected);
+    // On error return all nulls — never force-distribute wrong images
+    return topics.map(() => null);
   }
 }
 
