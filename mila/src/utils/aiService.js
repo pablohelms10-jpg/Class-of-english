@@ -341,12 +341,11 @@ Responde SOLO con JSON válido, sin texto antes ni después. Genera exactamente 
 }
 
 Reglas estrictas:
-- 1 nodo "main" (tema central) en x≈1000, y≈120
-- 3-5 nodos "sub" (subtemas principales) distribuidos en segunda fila, separados mínimo 420px horizontalmente
-- 5-7 nodos "detail" (conceptos específicos) en tercera fila, separados mínimo 380px
+- 1 nodo "main" (tema central) en x≈600, y≈80
+- 3-5 nodos "sub" (subtemas principales) distribuidos en segunda fila
+- 5-7 nodos "detail" (conceptos específicos) en tercera fila
 - Los "label" deben ser términos MÉDICOS REALES del texto, no genéricos
-- Distribuye en espacio 2200x1400px — los nodos deben estar MUY separados entre sí
-- Separación mínima entre centros de nodo: 420px horizontal, 200px vertical
+- Distribuye en espacio 1200x900px con separación clara entre nodos
 - NUNCA uses nombres como "Concepto 1", "Subtema A" o similares`;
 
   const raw = await askClaude(prompt, [], 4000);
