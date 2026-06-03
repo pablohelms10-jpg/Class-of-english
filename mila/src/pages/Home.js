@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useMila } from '../context/MilaContext';
-import { extractTextFromFile, extractImagesFromFile, extractFromPDF } from '../utils/parseContent';
+import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
 
 const MODES = [
   { id: 'flashcards', emoji: '🃏', label: 'Flashcards', desc: 'Tarjetas de memorización interactivas' },
@@ -35,6 +35,10 @@ export default function Home() {
           });
           text += result.text + '\n\n';
           images.push(...result.images);
+          if (result.truncated) {
+            setLoadingMsg(`⚠️ PDF muy largo — se procesaron las primeras ${MAX_PDF_PAGES} de ${result.totalPages} páginas`);
+            await new Promise(r => setTimeout(r, 2500));
+          }
           setPdfProgress(null);
         } else if (file.type.startsWith('image/')) {
           setLoadingMsg(`Procesando imagen: ${file.name}…`);

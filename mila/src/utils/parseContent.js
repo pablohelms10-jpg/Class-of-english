@@ -19,24 +19,26 @@ export function extractImagesFromFile(file) {
   });
 }
 
+export const MAX_PDF_PAGES = 50;
+
 export async function extractFromPDF(file, onProgress) {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+  const totalPages = Math.min(pdf.numPages, MAX_PDF_PAGES);
   let fullText = '';
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
     fullText += textContent.items.map(item => item.str).join(' ') + '\n\n';
-    if (onProgress) onProgress(pageNum, pdf.numPages);
+    if (onProgress) onProgress(pageNum, totalPages);
   }
 
-  // Las imágenes se guardan como referencia lazy — se renderizan solo al abrir la galería
-  const lazyImages = Array.from({ length: pdf.numPages }, (_, i) => ({
+  const lazyImages = Array.from({ length: totalPages }, (_, i) => ({
     src: null,
     name: `${file.name} — página ${i + 1}`,
     lazy: true,
@@ -44,12 +46,12 @@ export async function extractFromPDF(file, onProgress) {
     pageNum: i + 1,
   }));
 
-  return { text: fullText, images: lazyImages };
+  return { text: fullText, images: lazyImages, truncated: pdf.numPages > MAX_PDF_PAGES, totalPages: pdf.numPages };
 }
 
 export async function renderPDFPage(file, pageNum) {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
