@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  --stone-grey: #96948F;
+  --whisper-grey: #DADAD7;
+  --soft-grey: #E6E5E2;
+  --pale-mist: #F2F1EE;
+  --ghost-white: #FAFAF7;
+  --driftwood: #C1B7AF;
+  --feather-touch: #DAD5CF;
+  --cloud-veil: #ECEBE8;
+  --moonbeam: #F5F4F2;
+  --ash-plum: #B0A8A4;
+  --feather-fog: #EDE7E3;
+  --text-dark: #2C2C2C;
+  --text-mid: #6B6B6B;
+  --text-light: #9A9A9A;
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 32px;
+  --shadow-soft: 0 4px 24px rgba(150, 148, 143, 0.12);
+  --shadow-card: 0 8px 40px rgba(150, 148, 143, 0.18);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--ghost-white);
+  color: var(--text-dark);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+input, textarea {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--whisper-grey);
+  border-radius: 4px;
+}
+
+.serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
