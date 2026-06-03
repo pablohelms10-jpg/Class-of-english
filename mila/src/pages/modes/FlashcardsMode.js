@@ -54,6 +54,27 @@ export default function FlashcardsMode({ summary }) {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function regenerateAll() {
+    setLoading(true);
+    setCards([]);
+    setKnown(new Set());
+    setUnknown(new Set());
+    setIndex(0);
+    updateSummary(summary.id, { flashcards: [], flashcardsAllCovered: false, flashcardProgress: null });
+    generateFlashcardsAI(text, [], images)
+      .then(({ cards: generated, allCovered: done }) => {
+        setCards(generated);
+        setAllCovered(done);
+        updateSummary(summary.id, { flashcards: generated, flashcardsAllCovered: done });
+      })
+      .catch(() => {
+        const fallback = generateFlashcards(text);
+        setCards(fallback);
+        updateSummary(summary.id, { flashcards: fallback });
+      })
+      .finally(() => setLoading(false));
+  }
+
   function generateMore() {
     if (generating || allCovered) return;
     setGenerating(true);
@@ -135,6 +156,7 @@ export default function FlashcardsMode({ summary }) {
           <span style={{ fontSize: 12, color: '#7BAE7F' }}>✓ {known.size}</span>
           <span style={{ fontSize: 12, color: 'var(--ash-plum)' }}>✗ {unknown.size}</span>
           <GenerateMoreButton allCovered={allCovered} generating={generating} onClick={generateMore} small />
+          <button onClick={regenerateAll} title="Regenerar desde cero (con imágenes)" style={{ fontSize: 11, color: 'var(--text-light)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent' }}>↺</button>
         </div>
       </div>
 

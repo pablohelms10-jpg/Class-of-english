@@ -40,6 +40,29 @@ export default function QuizMode({ summary }) {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function regenerateAll() {
+    setLoading(true);
+    setQuestions([]);
+    setIndex(0);
+    setSelected(null);
+    setScore(0);
+    setDone(false);
+    setAnswers([]);
+    updateSummary(summary.id, { questions: [], questionsAllCovered: false });
+    generateQuestionsAI(text, [], images)
+      .then(({ questions: generated, allCovered: done }) => {
+        setQuestions(generated);
+        setAllCovered(done);
+        updateSummary(summary.id, { questions: generated, questionsAllCovered: done });
+      })
+      .catch(() => {
+        const fallback = generateQuestions(text);
+        setQuestions(fallback);
+        updateSummary(summary.id, { questions: fallback });
+      })
+      .finally(() => setLoading(false));
+  }
+
   function generateMore() {
     if (generating || allCovered) return;
     setGenerating(true);
@@ -167,6 +190,7 @@ export default function QuizMode({ summary }) {
               <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
             </button>
           )}
+          <button onClick={regenerateAll} title="Regenerar desde cero (con imágenes)" style={{ fontSize: 11, color: 'var(--text-light)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent' }}>↺</button>
         </div>
       </div>
 

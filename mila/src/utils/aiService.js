@@ -50,7 +50,7 @@ async function buildContent(prompt, images = []) {
   return content;
 }
 
-async function askClaude(prompt, images = []) {
+async function askClaude(prompt, images = [], maxTokens = 3000) {
   if (!API_KEY) throw new Error('No API key configurada');
   const content = images.length > 0 ? await buildContent(prompt, images) : prompt;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -63,7 +63,7 @@ async function askClaude(prompt, images = []) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content }],
     }),
   });
@@ -188,37 +188,38 @@ Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 
   return { questions, allCovered: false };
 }
 
-export async function generateConceptMapAI(text, images = []) {
-  const hasImages = images.length > 0;
-  const imageNote = hasImages
-    ? `\nTenés ${Math.min(images.length, 4)} imágenes (índices 0-${Math.min(images.length, 4) - 1}). Asigna "imageIndex" al nodo más relevante para cada imagen, null si no aplica.\n`
-    : '';
+export async function generateConceptMapAI(text) {
+  const prompt = `Eres un profesor de medicina. Analiza el siguiente resumen y crea un mapa conceptual detallado y organizado sobre los temas REALES del texto.
 
-  const prompt = `Eres un profesor de medicina. Crea un mapa conceptual RICO Y DETALLADO.${imageNote}
 RESUMEN:
 ${smartSample(text)}
 
-Responde SOLO con JSON válido. Genera 10-14 nodos:
+Responde SOLO con JSON válido, sin texto antes ni después. Genera exactamente 10-12 nodos con títulos ESPECÍFICOS del contenido (no genéricos):
 {
-  "title": "Tema principal",
+  "title": "Nombre real del tema",
   "nodes": [
     {
-      "id": 0, "label": "Título (2-4 palabras)", "type": "main",
-      "summary": "Una línea resumen",
-      "content": "Explicación de 2-4 oraciones con puntos importantes",
-      "bullets": ["Dato clave 1", "Dato clave 2", "Dato clave 3"],
-      "imageIndex": null,
+      "id": 0,
+      "label": "Nombre específico (2-4 palabras)",
+      "type": "main",
+      "summary": "Una oración resumiendo este concepto",
+      "content": "2-3 oraciones explicando los puntos clave de este concepto",
+      "bullets": ["Dato específico 1", "Dato específico 2", "Dato específico 3"],
       "x": 600, "y": 80
     }
   ],
-  "edges": [{"from": 0, "to": 1, "label": "contiene"}]
+  "edges": [{"from": 0, "to": 1, "label": "incluye"}]
 }
 
-Tipos: "main" (1 nodo central en x≈600,y≈80), "sub" (3-5 subtemas), "detail" (5-8 detalles).
-Distribuye en espacio 1200x900px. Contenido educativo con terminología médica.`;
+Reglas estrictas:
+- 1 nodo "main" (tema central) en x≈600, y≈80
+- 3-5 nodos "sub" (subtemas principales) distribuidos en segunda fila
+- 5-7 nodos "detail" (conceptos específicos) en tercera fila
+- Los "label" deben ser términos MÉDICOS REALES del texto, no genéricos
+- Distribuye en espacio 1200x900px con separación clara entre nodos
+- NUNCA uses nombres como "Concepto 1", "Subtema A" o similares`;
 
-  const selected = spreadImages(images, 4);
-  const raw = await askClaude(prompt, selected.length > 0 ? selected : []);
+  const raw = await askClaude(prompt, [], 4000);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Respuesta inválida de la IA');
   return JSON.parse(match[0]);

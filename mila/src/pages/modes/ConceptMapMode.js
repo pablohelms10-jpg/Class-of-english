@@ -29,31 +29,25 @@ export default function ConceptMapMode({ summary }) {
   const [dragging, setDragging] = useState(null);
   const containerRef = useRef(null);
 
+  function applyMap(data) {
+    setMapData(data);
+    const p = {};
+    data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+    setPositions(p);
+    updateSummary(summary.id, { conceptMap: data });
+  }
+
   useEffect(() => {
     if (cached) return;
     setLoading(true);
-    // Try with images first, fall back to text-only if that fails
-    generateConceptMapAI(text, images)
-      .catch(() => generateConceptMapAI(text, []))
-      .catch(() => generateConceptMap(text))
+    generateConceptMapAI(text)
       .then(data => {
         if (!data || !data.nodes?.length) throw new Error('empty');
-        setMapData(data);
-        const p = {};
-        data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
-        setPositions(p);
-        updateSummary(summary.id, { conceptMap: data });
+        applyMap(data);
       })
-      .catch(err => {
-        console.error(err);
-        // Last resort: basic fallback
+      .catch(() => {
         const fb = generateConceptMap(text);
-        if (fb?.nodes?.length) {
-          setMapData(fb);
-          const p = {};
-          fb.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
-          setPositions(p);
-        }
+        if (fb?.nodes?.length) applyMap(fb);
       })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -62,26 +56,15 @@ export default function ConceptMapMode({ summary }) {
     setLoading(true);
     setMapData(null);
     setExpanded(new Set([0]));
-    generateConceptMapAI(text, images)
-      .catch(() => generateConceptMapAI(text, []))
-      .catch(() => generateConceptMap(text))
+    updateSummary(summary.id, { conceptMap: null });
+    generateConceptMapAI(text)
       .then(data => {
         if (!data || !data.nodes?.length) throw new Error('empty');
-        setMapData(data);
-        const p = {};
-        data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
-        setPositions(p);
-        updateSummary(summary.id, { conceptMap: data });
+        applyMap(data);
       })
-      .catch(err => {
-        console.error(err);
+      .catch(() => {
         const fb = generateConceptMap(text);
-        if (fb?.nodes?.length) {
-          setMapData(fb);
-          const p = {};
-          fb.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
-          setPositions(p);
-        }
+        if (fb?.nodes?.length) applyMap(fb);
       })
       .finally(() => setLoading(false));
   }
