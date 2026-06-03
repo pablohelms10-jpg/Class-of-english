@@ -135,15 +135,44 @@ export default function ConceptMapMode({ summary }) {
   useEffect(() => { panRef.current = pan; }, [pan]);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
 
-  // Lock body scroll when fullscreen
+  // Sync isFullscreen with native browser fullscreen state
   useEffect(() => {
-    if (isFullscreen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    const onFSChange = () => {
+      const nativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (!nativeFS && isFullscreen) setIsFullscreen(false);
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    document.addEventListener('webkitfullscreenchange', onFSChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFSChange);
+      document.removeEventListener('webkitfullscreenchange', onFSChange);
+    };
+  }, [isFullscreen]);
+
+  // Lock body scroll when using CSS-portal fullscreen (iOS fallback)
+  useEffect(() => {
+    document.body.style.overflow = isFullscreen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [isFullscreen]);
+
+  function toggleFullscreen() {
+    if (isFullscreen) {
+      // Exit native or CSS fullscreen
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      setIsFullscreen(false);
+      return;
+    }
+    // Try native fullscreen API first (hides browser chrome on desktop + Android)
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+    if (req) {
+      req.call(el).then(() => setIsFullscreen(true)).catch(() => setIsFullscreen(true));
+    } else {
+      // iOS Safari fallback: CSS portal covers viewport
+      setIsFullscreen(true);
+    }
+  }
 
   function applyNodes(nodes) {
     const p = {};
@@ -329,7 +358,7 @@ export default function ConceptMapMode({ summary }) {
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFullscreen]); // re-attach when portal moves the canvas to a new DOM node
 
   const onCanvasPanStart = useCallback(e => {
     if (dragging) return;
@@ -441,17 +470,19 @@ export default function ConceptMapMode({ summary }) {
           <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
           <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto' }}>↺ Regenerar</button>
           <button
-            onClick={() => setIsFullscreen(f => !f)}
-            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
             style={{ ...toolBtnStyle, fontSize: 17, width: 32, padding: 0 }}
           >
-            {isFullscreen ? '✕' : '⛶'}
+            {isFullscreen ? '⛶' : '⛶'}
           </button>
         </div>
       </div>
 
-      {/* Canvas */}
+      {/* Canvas — touch-action:none forced on all children to prevent iOS scroll override */}
+      <style>{`[data-mila-map],[data-mila-map] *{touch-action:none!important;-webkit-user-select:none;user-select:none}`}</style>
       <div
+        data-mila-map=""
         ref={containerRef}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
@@ -469,6 +500,7 @@ export default function ConceptMapMode({ summary }) {
           background: 'var(--pale-mist)',
           userSelect: 'none',
           touchAction: 'none',
+          WebkitOverflowScrolling: 'auto',
         }}
       >
         {/* Dot grid */}
