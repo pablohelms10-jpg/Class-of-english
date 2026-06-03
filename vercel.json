@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd mila && npm install && npm run build",
+  "outputDirectory": "mila/build",
+  "installCommand": "echo skip"
+}
