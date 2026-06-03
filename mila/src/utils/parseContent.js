@@ -19,7 +19,7 @@ export function extractImagesFromFile(file) {
   });
 }
 
-export async function extractFromPDF(file) {
+export async function extractFromPDF(file, onProgress) {
   const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
@@ -27,25 +27,39 @@ export async function extractFromPDF(file) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
   let fullText = '';
-  const images = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
-
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map(item => item.str).join(' ');
-    fullText += pageText + '\n\n';
-
-    const canvas = document.createElement('canvas');
-    const viewport = page.getViewport({ scale: 1.5 });
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    images.push({ src: canvas.toDataURL('image/jpeg', 0.85), name: `${file.name} — página ${pageNum}` });
+    fullText += textContent.items.map(item => item.str).join(' ') + '\n\n';
+    if (onProgress) onProgress(pageNum, pdf.numPages);
   }
 
-  return { text: fullText, images };
+  // Las imágenes se guardan como referencia lazy — se renderizan solo al abrir la galería
+  const lazyImages = Array.from({ length: pdf.numPages }, (_, i) => ({
+    src: null,
+    name: `${file.name} — página ${i + 1}`,
+    lazy: true,
+    pdfFile: file,
+    pageNum: i + 1,
+  }));
+
+  return { text: fullText, images: lazyImages };
+}
+
+export async function renderPDFPage(file, pageNum) {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 1.5 });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return canvas.toDataURL('image/jpeg', 0.85);
 }
 
 export function generateFlashcards(text) {

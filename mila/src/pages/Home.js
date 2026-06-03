@@ -15,6 +15,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
+  const [pdfProgress, setPdfProgress] = useState(null);
   const [title, setTitle] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
@@ -27,10 +28,14 @@ export default function Home() {
 
       for (const file of files) {
         if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-          setLoadingMsg(`Leyendo PDF: ${file.name}…`);
-          const result = await extractFromPDF(file);
+          setLoadingMsg(`Leyendo PDF: ${file.name}`);
+          setPdfProgress({ current: 0, total: 0 });
+          const result = await extractFromPDF(file, (current, total) => {
+            setPdfProgress({ current, total });
+          });
           text += result.text + '\n\n';
           images.push(...result.images);
+          setPdfProgress(null);
         } else if (file.type.startsWith('image/')) {
           setLoadingMsg(`Procesando imagen: ${file.name}…`);
           const imgs = await extractImagesFromFile(file);
@@ -53,6 +58,7 @@ export default function Home() {
     } finally {
       setLoading(false);
       setLoadingMsg('');
+      setPdfProgress(null);
     }
   }
 
@@ -140,7 +146,7 @@ export default function Home() {
           }}
         >
           {loading ? (
-            <LoadingDots message={loadingMsg} />
+            <LoadingDots message={loadingMsg} progress={pdfProgress} />
           ) : (
             <>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
@@ -339,21 +345,27 @@ function PillButton({ label, onClick, secondary }) {
   );
 }
 
-function LoadingDots({ message }) {
+function LoadingDots({ message, progress }) {
+  const pct = progress && progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : null;
   return (
     <div style={{ padding: '20px 0', textAlign: 'center' }}>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
         {[0, 1, 2].map(i => (
           <div key={i} style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--driftwood)',
+            width: 8, height: 8, borderRadius: '50%', background: 'var(--driftwood)',
             animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
           }} />
         ))}
       </div>
-      {message && <p style={{ fontSize: 12, color: 'var(--text-light)' }}>{message}</p>}
+      {message && <p style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 8 }}>{message}</p>}
+      {progress && progress.total > 0 && (
+        <div style={{ maxWidth: 200, margin: '0 auto' }}>
+          <div style={{ height: 3, background: 'var(--soft-grey)', borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.3s ease' }} />
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-light)' }}>Página {progress.current} de {progress.total}</p>
+        </div>
+      )}
       <style>{`@keyframes pulse { 0%,80%,100%{opacity:0.3;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }`}</style>
     </div>
   );
