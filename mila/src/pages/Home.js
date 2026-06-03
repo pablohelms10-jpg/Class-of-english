@@ -32,7 +32,7 @@ const inputStyle = {
 };
 
 export default function Home() {
-  const { summaries, addSummary, setActiveSummary, deleteSummary } = useMila();
+  const { summaries, addSummary, setActiveSummary, setActiveMode, deleteSummary } = useMila();
   const fileRef = useRef();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -131,11 +131,16 @@ export default function Home() {
     setCollapsedSubjects(prev => ({ ...prev, [key]: !prev[key] }));
   }
 
+  function openMode(s, modeId) {
+    setActiveSummary(s);
+    setActiveMode(modeId);
+  }
+
   return (
     <div>
-      {summaries.length === 0 ? (
-        <HeroSection />
-      ) : (
+      <HeroSection compact={summaries.length > 0} />
+
+      {summaries.length > 0 && (
         <div style={{ marginBottom: 40 }}>
           <h2 style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>
             Tus resúmenes
@@ -147,26 +152,11 @@ export default function Home() {
             <div key={subjectKey} style={{ marginBottom: 28 }}>
               <button
                 onClick={() => toggleSubject(subjectKey)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 12,
-                  cursor: 'pointer',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
               >
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-mid)', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                  {subjectKey}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--soft-grey)', borderRadius: 20, padding: '2px 8px' }}>
-                  {subjectSummaries.length}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>
-                  {collapsedSubjects[subjectKey] ? '▶' : '▼'}
-                </span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-mid)', letterSpacing: '0.3px', textTransform: 'uppercase' }}>{subjectKey}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--soft-grey)', borderRadius: 20, padding: '2px 8px' }}>{subjectSummaries.length}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>{collapsedSubjects[subjectKey] ? '▶' : '▼'}</span>
               </button>
               {!collapsedSubjects[subjectKey] && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
@@ -175,6 +165,7 @@ export default function Home() {
                       key={s.id}
                       summary={s}
                       onOpen={() => setActiveSummary(s)}
+                      onOpenMode={(modeId) => openMode(s, modeId)}
                       onDelete={() => deleteSummary(s.id)}
                     />
                   ))}
@@ -291,33 +282,29 @@ export default function Home() {
         )}
       </div>
 
-      {summaries.length > 0 && (
-        <div>
-          <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-mid)', marginBottom: 16 }}>
-            ¿Qué puedes hacer con MILA?
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-            {MODES.map(m => (
-              <div key={m.id} style={{
-                padding: '20px 16px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--pale-mist)',
-                border: '1px solid var(--whisper-grey)',
-              }}>
-                <div style={{ marginBottom: 10 }}><m.Icon size={22} color="var(--text-mid)" /></div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>{m.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{m.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function HeroSection() {
+function HeroSection({ compact }) {
   const { darkMode } = useMila();
+  if (compact) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 0 28px', animation: 'fadeUp 0.4s ease both' }}>
+        <div style={{ opacity: 0.85, flexShrink: 0 }}>
+          <MilaLogo size={36} dark={darkMode} />
+        </div>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-0.5px', margin: 0 }}>
+            Hola, soy <span style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>MILA</span>
+          </h1>
+          <p style={{ fontSize: 12, color: 'var(--text-light)', margin: '2px 0 0' }}>
+            Tu asistente de estudio · Sube otro resumen abajo
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ textAlign: 'center', padding: '48px 0 56px', animation: 'fadeUp 0.6s ease both' }}>
       <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9 }}>
@@ -341,7 +328,7 @@ function HeroSection() {
   );
 }
 
-function SummaryCard({ summary, onOpen, onDelete }) {
+function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
   const { updateSummary } = useMila();
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -482,6 +469,37 @@ function SummaryCard({ summary, onOpen, onDelete }) {
           })}
         </div>
       )}
+
+      {/* Mode shortcut icons */}
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--soft-grey)', display: 'flex', gap: 4 }}>
+        {MODES.filter(m => m.id !== 'images' || (summary.images || []).length > 0).map(m => (
+          <button
+            key={m.id}
+            onClick={e => { e.stopPropagation(); onOpenMode(m.id); }}
+            title={m.label}
+            style={{
+              flex: 1,
+              padding: '7px 4px',
+              borderRadius: 8,
+              border: '1px solid var(--whisper-grey)',
+              background: 'var(--ghost-white)',
+              color: 'var(--text-mid)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; e.currentTarget.style.borderColor = 'var(--driftwood)'; e.currentTarget.style.color = 'var(--text-dark)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--ghost-white)'; e.currentTarget.style.borderColor = 'var(--whisper-grey)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+          >
+            <m.Icon size={16} color="currentColor" />
+            <span style={{ fontSize: 9, letterSpacing: '0.2px', whiteSpace: 'nowrap' }}>{m.label.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Edit button */}
       {hovered && (
         <button
