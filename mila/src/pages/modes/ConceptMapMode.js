@@ -73,69 +73,128 @@ export default function ConceptMapMode({ summary }) {
       .finally(() => setLoading(false));
   }
 
-  // --- Zoom helpers ---
+  // Refs for current pan/scale so event handlers don't go stale
+  const panRef = useRef(pan);
+  const scaleRef = useRef(scale);
+  useEffect(() => { panRef.current = pan; }, [pan]);
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+
+  // --- Zoom centered on a canvas point ---
   function zoom(factor, cx, cy) {
-    setScale(prev => {
-      const next = Math.min(2.5, Math.max(0.2, prev * factor));
-      if (cx != null && cy != null) {
-        setPan(p => ({
-          x: cx - (cx - p.x) * (next / prev),
-          y: cy - (cy - p.y) * (next / prev),
-        }));
-      }
-      return next;
-    });
+    const prev = scaleRef.current;
+    const next = Math.min(2.5, Math.max(0.2, prev * factor));
+    scaleRef.current = next;
+    setScale(next);
+    if (cx != null && cy != null) {
+      const p = panRef.current;
+      const newPan = {
+        x: cx - (cx - p.x) * (next / prev),
+        y: cy - (cy - p.y) * (next / prev),
+      };
+      panRef.current = newPan;
+      setPan(newPan);
+    }
   }
 
-  // --- Wheel: zoom centered on cursor ---
-  const onWheel = useCallback(e => {
-    e.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    const cx = e.clientX - (rect?.left || 0);
-    const cy = e.clientY - (rect?.top || 0);
-    zoom(e.deltaY < 0 ? 1.12 : 0.88, cx, cy);
-  }, []);
-
+  // --- All pointer/touch events attached imperatively so we can preventDefault ---
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [onWheel]);
 
-  // --- Touch: pinch to zoom + two-finger pan ---
-  function onTouchStart(e) {
-    if (e.touches.length === 2) {
-      lastTouchDist.current = getTouchDist(e.touches);
-    }
-  }
-  function onTouchMove(e) {
-    if (e.touches.length === 2) {
+    // Wheel: trackpad two-finger scroll → pan; pinch (ctrlKey) → zoom
+    function handleWheel(e) {
       e.preventDefault();
-      const dist = getTouchDist(e.touches);
-      if (lastTouchDist.current) {
-        const factor = dist / lastTouchDist.current;
-        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const rect = containerRef.current?.getBoundingClientRect();
-        zoom(factor, cx - (rect?.left || 0), cy - (rect?.top || 0));
+      e.stopPropagation();
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch gesture on trackpad / ctrl+scroll
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        zoom(factor, cx, cy);
+      } else {
+        // Two-finger scroll → pan
+        const p = panRef.current;
+        const newPan = { x: p.x - e.deltaX, y: p.y - e.deltaY };
+        panRef.current = newPan;
+        setPan(newPan);
       }
-      lastTouchDist.current = dist;
     }
-  }
-  function onTouchEnd() { lastTouchDist.current = null; }
-  function getTouchDist(touches) {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
 
-  // --- Pan with mouse drag on empty canvas ---
+    // Touch: one finger → drag node or pan canvas; two fingers → pinch zoom + pan
+    let lastTouches = null;
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      lastTouches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      const touches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+      if (!lastTouches || lastTouches.length !== touches.length) {
+        lastTouches = touches;
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+
+      if (touches.length === 2 && lastTouches.length === 2) {
+        // Two fingers: pinch zoom + simultaneous pan
+        const prevDist = Math.hypot(lastTouches[1].x - lastTouches[0].x, lastTouches[1].y - lastTouches[0].y);
+        const nextDist = Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y);
+        const factor = prevDist > 0 ? nextDist / prevDist : 1;
+
+        // Center of the two fingers
+        const cx = (touches[0].x + touches[1].x) / 2 - rect.left;
+        const cy = (touches[0].y + touches[1].y) / 2 - rect.top;
+
+        // Pan delta (average finger movement)
+        const dx = ((touches[0].x - lastTouches[0].x) + (touches[1].x - lastTouches[1].x)) / 2;
+        const dy = ((touches[0].y - lastTouches[0].y) + (touches[1].y - lastTouches[1].y)) / 2;
+
+        // Apply zoom centered on pinch midpoint
+        zoom(factor, cx, cy);
+        // Apply pan
+        const p = panRef.current;
+        const newPan = { x: p.x + dx, y: p.y + dy };
+        panRef.current = newPan;
+        setPan(newPan);
+      } else if (touches.length === 1 && lastTouches.length === 1) {
+        // Single finger: pan canvas (unless dragging a node — node drag handled by mouse events)
+        const dx = touches[0].x - lastTouches[0].x;
+        const dy = touches[0].y - lastTouches[0].y;
+        const p = panRef.current;
+        const newPan = { x: p.x + dx, y: p.y + dy };
+        panRef.current = newPan;
+        setPan(newPan);
+      }
+
+      lastTouches = touches;
+    }
+
+    function handleTouchEnd(e) {
+      e.preventDefault();
+      lastTouches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEnd, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Mouse pan on empty canvas (desktop) ---
   const onCanvasPanStart = useCallback(e => {
     if (dragging) return;
     setIsPanning(true);
-    panStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
-  }, [dragging, pan]);
+    panStart.current = { mx: e.clientX, my: e.clientY, px: panRef.current.x, py: panRef.current.y };
+  }, [dragging]);
 
   const onMouseMove = useCallback(e => {
     if (dragging) {
@@ -144,17 +203,19 @@ export default function ConceptMapMode({ summary }) {
       setPositions(prev => ({
         ...prev,
         [dragging.id]: {
-          x: (e.clientX - rect.left - pan.x) / scale - dragging.ox,
-          y: (e.clientY - rect.top - pan.y) / scale - dragging.oy,
+          x: (e.clientX - rect.left - panRef.current.x) / scaleRef.current - dragging.ox,
+          y: (e.clientY - rect.top - panRef.current.y) / scaleRef.current - dragging.oy,
         }
       }));
     } else if (isPanning && panStart.current) {
-      setPan({
+      const newPan = {
         x: panStart.current.px + (e.clientX - panStart.current.mx),
         y: panStart.current.py + (e.clientY - panStart.current.my),
-      });
+      };
+      panRef.current = newPan;
+      setPan(newPan);
     }
-  }, [dragging, isPanning, pan, scale]);
+  }, [dragging, isPanning]);
 
   const onMouseUp = useCallback(() => {
     setDragging(null);
@@ -170,8 +231,8 @@ export default function ConceptMapMode({ summary }) {
     const pos = positions[node.id] || { x: node.x, y: node.y };
     setDragging({
       id: node.id,
-      ox: (e.clientX - rect.left - pan.x) / scale - pos.x,
-      oy: (e.clientY - rect.top - pan.y) / scale - pos.y,
+      ox: (e.clientX - rect.left - panRef.current.x) / scaleRef.current - pos.x,
+      oy: (e.clientY - rect.top - panRef.current.y) / scaleRef.current - pos.y,
     });
   }
 
@@ -221,9 +282,6 @@ export default function ConceptMapMode({ summary }) {
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
         onMouseDown={onCanvasPanStart}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         style={{
           width: '100%', height: 620,
           overflow: 'hidden',
@@ -233,6 +291,7 @@ export default function ConceptMapMode({ summary }) {
           cursor: dragging ? 'grabbing' : isPanning ? 'grabbing' : 'grab',
           background: 'var(--pale-mist)',
           userSelect: 'none',
+          touchAction: 'none',
         }}
       >
         {/* Dot grid (fixed, behind transform) */}
