@@ -10,6 +10,8 @@ export default function QuizMode({ summary }) {
 
   const [questions, setQuestions] = useState(cached || []);
   const [loading, setLoading] = useState(!cached || cached.length === 0);
+  const [generating, setGenerating] = useState(false);
+  const [allCovered, setAllCovered] = useState(summary?.questionsAllCovered || false);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState(null);
   const [score, setScore] = useState(0);
@@ -19,10 +21,11 @@ export default function QuizMode({ summary }) {
   useEffect(() => {
     if (cached && cached.length > 0) return;
     setLoading(true);
-    generateQuestionsAI(text)
-      .then(generated => {
+    generateQuestionsAI(text, [])
+      .then(({ questions: generated, allCovered: done }) => {
         setQuestions(generated);
-        updateSummary(summary.id, { questions: generated });
+        setAllCovered(done);
+        updateSummary(summary.id, { questions: generated, questionsAllCovered: done });
       })
       .catch(() => {
         const fallback = generateQuestions(text);
@@ -32,20 +35,22 @@ export default function QuizMode({ summary }) {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function regenerate() {
-    setLoading(true);
-    setIndex(0); setSelected(null); setScore(0); setDone(false); setAnswers([]);
-    generateQuestionsAI(text)
-      .then(generated => {
-        setQuestions(generated);
-        updateSummary(summary.id, { questions: generated });
+  function generateMore() {
+    if (generating || allCovered) return;
+    setGenerating(true);
+    generateQuestionsAI(text, questions)
+      .then(({ questions: newQs, allCovered: done }) => {
+        if (done || newQs.length === 0) {
+          setAllCovered(true);
+          updateSummary(summary.id, { questionsAllCovered: true });
+        } else {
+          const merged = [...questions, ...newQs];
+          setQuestions(merged);
+          updateSummary(summary.id, { questions: merged, questionsAllCovered: false });
+        }
       })
-      .catch(() => {
-        const fallback = generateQuestions(text);
-        setQuestions(fallback);
-        updateSummary(summary.id, { questions: fallback });
-      })
-      .finally(() => setLoading(false));
+      .catch(console.error)
+      .finally(() => setGenerating(false));
   }
 
   if (loading) return (
@@ -67,14 +72,14 @@ export default function QuizMode({ summary }) {
   );
 
   if (done) {
+    const pct = Math.round((score / answers.length) * 100);
     return (
       <div style={{ textAlign: 'center', padding: '48px 0' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>{score >= questions.length * 0.7 ? '🏆' : '📖'}</div>
-        <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>{score} / {questions.length} correctas</h3>
-        <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 40 }}>
-          {Math.round((score / questions.length) * 100)}% de acierto
-        </p>
-        <div style={{ textAlign: 'left', maxWidth: 500, margin: '0 auto 40px' }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>{pct >= 70 ? '🏆' : '📖'}</div>
+        <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>{score} / {answers.length} correctas</h3>
+        <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 32 }}>{pct}% de acierto</p>
+
+        <div style={{ textAlign: 'left', maxWidth: 500, margin: '0 auto 32px' }}>
           {answers.map((a, i) => (
             <div key={i} style={{ padding: '14px 18px', borderRadius: 'var(--radius-sm)', marginBottom: 10, background: a.correct ? 'rgba(123,174,127,0.1)' : 'rgba(176,168,164,0.12)', border: `1px solid ${a.correct ? 'rgba(123,174,127,0.3)' : 'rgba(176,168,164,0.3)'}`, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <span style={{ fontSize: 14 }}>{a.correct ? '✓' : '✗'}</span>
@@ -85,15 +90,28 @@ export default function QuizMode({ summary }) {
             </div>
           ))}
         </div>
+
+        {allCovered && (
+          <div style={{ marginBottom: 24, padding: '12px 16px', borderRadius: 10, background: 'rgba(123,174,127,0.1)', border: '1px solid rgba(123,174,127,0.35)', display: 'flex', alignItems: 'center', gap: 10, maxWidth: 420, margin: '0 auto 24px' }}>
+            <span style={{ fontSize: 16 }}>✅</span>
+            <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>Cubriste todos los temas del resumen — {questions.length} preguntas en total. ¡Estás listo!</span>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => { setIndex(0); setSelected(null); setScore(0); setDone(false); setAnswers([]); }}
             style={{ padding: '14px 32px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 15, fontWeight: 500 }}
           >Repetir quiz</button>
-          <button
-            onClick={regenerate}
-            style={{ padding: '14px 24px', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--soft-grey)', color: 'var(--text-mid)', fontSize: 14 }}
-          >↺ Regenerar</button>
+          {!allCovered && (
+            <button
+              onClick={() => { generateMore(); setIndex(questions.length); setDone(false); setSelected(null); }}
+              disabled={generating}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 22px', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--driftwood)', color: 'var(--driftwood)', background: 'transparent', fontSize: 14, fontWeight: 500, opacity: generating ? 0.6 : 1 }}
+            >
+              {generating ? '↻ Generando…' : '+ Más preguntas'}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -119,15 +137,27 @@ export default function QuizMode({ summary }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <span style={{ fontSize: 13, color: 'var(--text-light)' }}>Pregunta {index + 1} de {questions.length}</span>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>✓ {score}</span>
-          <button
-            onClick={regenerate}
-            title="Regenerar con IA"
-            style={{ fontSize: 11, color: 'var(--text-light)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent' }}
-          >↺ Regenerar</button>
+          {!allCovered && (
+            <button
+              onClick={generateMore}
+              disabled={generating}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--driftwood)', padding: '3px 10px', borderRadius: 6, border: '1.5px solid var(--driftwood)', background: 'transparent', opacity: generating ? 0.6 : 1, cursor: generating ? 'default' : 'pointer' }}
+            >
+              {generating ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>↻</span></> : '+ Más'}
+              <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+            </button>
+          )}
         </div>
       </div>
+
+      {allCovered && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(123,174,127,0.1)', border: '1px solid rgba(123,174,127,0.35)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>✅</span>
+          <span style={{ fontSize: 12, color: 'var(--text-mid)' }}>Todos los temas cubiertos — {questions.length} preguntas en total</span>
+        </div>
+      )}
 
       <div style={{ height: 4, background: 'var(--soft-grey)', borderRadius: 4, marginBottom: 32, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${(index / questions.length) * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />

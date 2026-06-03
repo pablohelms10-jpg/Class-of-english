@@ -31,13 +31,19 @@ async function askClaude(prompt) {
   return data.content[0].text;
 }
 
-export async function generateFlashcardsAI(text) {
-  const prompt = `Profesor de medicina. Genera 10 flashcards del resumen. Solo JSON, sin texto extra.
+// Returns { cards, allCovered }
+export async function generateFlashcardsAI(text, existing = []) {
+  const existingList = existing.length > 0
+    ? `\nFLASHCARDS YA CREADAS (NO repetir estos temas):\n${existing.map(c => `- ${c.front}`).join('\n')}\n`
+    : '';
 
+  const prompt = `Eres un profesor de medicina. Genera 10 flashcards NUEVAS del resumen.${existingList}
 RESUMEN:
 ${smartSample(text)}
 
-Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
+Si ya se cubrieron TODOS los temas del resumen con las flashcards existentes, responde exactamente: {"allCovered": true}
+
+Si quedan temas, responde SOLO con un JSON array sin texto adicional:
 [
   {
     "front": "¿Pregunta clara y específica sobre un concepto importante?",
@@ -46,39 +52,54 @@ Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
   }
 ]
 
-Reglas:
-- Preguntas específicas sobre definiciones, funciones, relaciones
-- Respuestas cortas y memorables. Máximo 10 flashcards.`;
+Reglas: NO repetir temas ya cubiertos. Preguntas sobre definiciones, funciones, relaciones. Respuestas cortas.`;
 
   const raw = await askClaude(prompt);
+
+  if (raw.includes('"allCovered": true') || raw.includes('"allCovered":true')) {
+    return { cards: [], allCovered: true };
+  }
+
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  return JSON.parse(match[0]).map((c, i) => ({ ...c, id: i }));
+  const cards = JSON.parse(match[0]).map((c, i) => ({ ...c, id: Date.now() + i }));
+  return { cards, allCovered: false };
 }
 
-export async function generateQuestionsAI(text) {
-  const prompt = `Profesor de medicina. Genera 8 preguntas de opción múltiple. Solo JSON, sin texto extra.
+// Returns { questions, allCovered }
+export async function generateQuestionsAI(text, existing = []) {
+  const existingList = existing.length > 0
+    ? `\nPREGUNTAS YA CREADAS (NO repetir estos temas):\n${existing.map(q => `- ${q.question}`).join('\n')}\n`
+    : '';
 
+  const prompt = `Eres un profesor de medicina. Genera 8 preguntas de opción múltiple NUEVAS.${existingList}
 RESUMEN:
 ${smartSample(text)}
 
-Responde SOLO con un JSON válido, sin texto adicional:
+Si ya se cubrieron TODOS los temas del resumen con las preguntas existentes, responde exactamente: {"allCovered": true}
+
+Si quedan temas, responde SOLO con un JSON array sin texto adicional:
 [
   {
     "question": "Pregunta clara sobre el contenido",
-    "options": ["Opción A correcta o incorrecta", "Opción B", "Opción C", "Opción D"],
+    "options": ["Opción A", "Opción B", "Opción C", "Opción D"],
     "correct": "Opción correcta exactamente igual a como aparece en options",
     "explanation": "Por qué es correcta esta respuesta"
   }
 ]
 
-Reglas:
-- Opciones incorrectas plausibles del mismo tema. Máximo 8 preguntas.`;
+Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles del mismo tema.`;
 
   const raw = await askClaude(prompt);
+
+  if (raw.includes('"allCovered": true') || raw.includes('"allCovered":true')) {
+    return { questions: [], allCovered: true };
+  }
+
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  return JSON.parse(match[0]).map((q, i) => ({ ...q, id: i }));
+  const questions = JSON.parse(match[0]).map((q, i) => ({ ...q, id: Date.now() + i }));
+  return { questions, allCovered: false };
 }
 
 export async function generateConceptMapAI(text) {

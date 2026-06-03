@@ -10,6 +10,8 @@ export default function FlashcardsMode({ summary }) {
 
   const [cards, setCards] = useState(cached || []);
   const [loading, setLoading] = useState(!cached || cached.length === 0);
+  const [generating, setGenerating] = useState(false);
+  const [allCovered, setAllCovered] = useState(summary?.flashcardsAllCovered || false);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [known, setKnown] = useState(new Set());
@@ -18,10 +20,11 @@ export default function FlashcardsMode({ summary }) {
   useEffect(() => {
     if (cached && cached.length > 0) return;
     setLoading(true);
-    generateFlashcardsAI(text)
-      .then(generated => {
+    generateFlashcardsAI(text, [])
+      .then(({ cards: generated, allCovered: done }) => {
         setCards(generated);
-        updateSummary(summary.id, { flashcards: generated });
+        setAllCovered(done);
+        updateSummary(summary.id, { flashcards: generated, flashcardsAllCovered: done });
       })
       .catch(() => {
         const fallback = generateFlashcards(text);
@@ -31,20 +34,22 @@ export default function FlashcardsMode({ summary }) {
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function regenerate() {
-    setLoading(true);
-    setIndex(0); setFlipped(false); setKnown(new Set()); setUnknown(new Set());
-    generateFlashcardsAI(text)
-      .then(generated => {
-        setCards(generated);
-        updateSummary(summary.id, { flashcards: generated });
+  function generateMore() {
+    if (generating || allCovered) return;
+    setGenerating(true);
+    generateFlashcardsAI(text, cards)
+      .then(({ cards: newCards, allCovered: done }) => {
+        if (done || newCards.length === 0) {
+          setAllCovered(true);
+          updateSummary(summary.id, { flashcardsAllCovered: true });
+        } else {
+          const merged = [...cards, ...newCards];
+          setCards(merged);
+          updateSummary(summary.id, { flashcards: merged, flashcardsAllCovered: false });
+        }
       })
-      .catch(() => {
-        const fallback = generateFlashcards(text);
-        setCards(fallback);
-        updateSummary(summary.id, { flashcards: fallback });
-      })
-      .finally(() => setLoading(false));
+      .catch(console.error)
+      .finally(() => setGenerating(false));
   }
 
   if (loading) return <LoadingAI message="MILA está generando tus flashcards…" />;
@@ -66,10 +71,7 @@ export default function FlashcardsMode({ summary }) {
             onClick={() => { setIndex(0); setFlipped(false); setKnown(new Set()); setUnknown(new Set()); }}
             style={{ padding: '14px 32px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 15, fontWeight: 500 }}
           >Volver a empezar</button>
-          <button
-            onClick={regenerate}
-            style={{ padding: '14px 24px', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--soft-grey)', color: 'var(--text-mid)', fontSize: 14 }}
-          >↺ Regenerar</button>
+          <GenerateMoreButton allCovered={allCovered} generating={generating} onClick={generateMore} />
         </div>
       </div>
     );
@@ -82,16 +84,16 @@ export default function FlashcardsMode({ summary }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <span style={{ fontSize: 13, color: 'var(--text-light)' }}>{index + 1} / {cards.length}</span>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: '#7BAE7F' }}>✓ {known.size}</span>
           <span style={{ fontSize: 12, color: 'var(--ash-plum)' }}>✗ {unknown.size}</span>
-          <button
-            onClick={regenerate}
-            title="Regenerar con IA"
-            style={{ fontSize: 11, color: 'var(--text-light)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent' }}
-          >↺ Regenerar</button>
+          <GenerateMoreButton allCovered={allCovered} generating={generating} onClick={generateMore} small />
         </div>
       </div>
+
+      {allCovered && (
+        <AllCoveredBanner type="flashcards" count={cards.length} />
+      )}
 
       <div style={{ height: 4, background: 'var(--soft-grey)', borderRadius: 4, marginBottom: 32, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${progress * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />
@@ -100,8 +102,7 @@ export default function FlashcardsMode({ summary }) {
       <div
         onClick={() => setFlipped(f => !f)}
         style={{
-          minHeight: 240,
-          borderRadius: 'var(--radius-lg)',
+          minHeight: 240, borderRadius: 'var(--radius-lg)',
           background: flipped ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)' : 'var(--pale-mist)',
           border: `1.5px solid ${flipped ? 'transparent' : 'var(--whisper-grey)'}`,
           boxShadow: 'var(--shadow-card)',
@@ -148,6 +149,51 @@ export default function FlashcardsMode({ summary }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function GenerateMoreButton({ allCovered, generating, onClick, small }) {
+  if (allCovered) return null;
+  return (
+    <button
+      onClick={onClick}
+      disabled={generating}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: small ? '3px 10px' : '12px 22px',
+        borderRadius: small ? 6 : 'var(--radius-lg)',
+        border: '1.5px solid var(--driftwood)',
+        color: 'var(--driftwood)', background: 'transparent',
+        fontSize: small ? 11 : 14, fontWeight: 500,
+        opacity: generating ? 0.6 : 1, cursor: generating ? 'default' : 'pointer',
+        transition: 'all 0.2s',
+      }}
+    >
+      {generating ? (
+        <>
+          <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: small ? 11 : 14 }}>↻</span>
+          {!small && ' Generando…'}
+        </>
+      ) : (
+        <>{small ? '+ Más' : '+ Generar más'}</>
+      )}
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+    </button>
+  );
+}
+
+function AllCoveredBanner({ type, count }) {
+  return (
+    <div style={{
+      marginBottom: 20, padding: '12px 16px', borderRadius: 10,
+      background: 'rgba(123,174,127,0.1)', border: '1px solid rgba(123,174,127,0.35)',
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <span style={{ fontSize: 16 }}>✅</span>
+      <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>
+        Cubriste todos los temas del resumen — {count} {type} en total. ¡Estás listo!
+      </span>
     </div>
   );
 }
