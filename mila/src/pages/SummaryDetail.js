@@ -1,146 +1,154 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMila } from '../context/MilaContext';
 import FlashcardsMode from './modes/FlashcardsMode';
 import QuizMode from './modes/QuizMode';
 import ConceptMapMode from './modes/ConceptMapMode';
-import ImagesMode from './modes/ImagesMode';
+import ImagesMode from './modes/ImagesMode'; // eslint-disable-line no-unused-vars
 import ContentEditorPanel from '../components/ContentEditorPanel';
-import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon } from '../components/Icons';
-
-const MODES = [
-  { id: 'flashcards', Icon: FlashcardIcon, label: 'Flashcards' },
-  { id: 'quiz', Icon: QuizIcon, label: 'Preguntas' },
-  { id: 'map', Icon: MapIcon, label: 'Mapa' },
-  { id: 'images', Icon: GalleryIcon, label: 'Imágenes' },
-];
+import { FlashcardIcon, QuizIcon } from '../components/Icons';
 
 export default function SummaryDetail() {
-  const { activeSummary, activeMode, setActiveMode } = useMila();
+  const { activeSummary } = useMila();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [overlay, setOverlay] = useState(null); // 'flashcards' | 'quiz' | null
+
+  useEffect(() => {
+    if (overlay) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [overlay]);
 
   if (!activeSummary) return null;
 
-  const hasFlashcards = (activeSummary.flashcards || []).length > 0;
-  const hasQuestions = (activeSummary.questions || []).length > 0;
-  const hasContent = hasFlashcards || hasQuestions;
+  const wordCount = activeSummary.text
+    ? activeSummary.text.split(/\s+/).filter(Boolean).length
+    : 0;
+  const imageCount = (activeSummary.images || []).length;
+
+  const hasContent = (activeSummary.flashcards || []).length > 0 || (activeSummary.questions || []).length > 0;
 
   return (
     <div>
-      {/* Summary header */}
-      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 26, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6, letterSpacing: '-0.5px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 5, letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {activeSummary.title}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-light)' }}>
-            {activeSummary.text ? `${activeSummary.text.split(/\s+/).filter(Boolean).length} palabras` : ''}
-            {activeSummary.images?.length > 0 ? ` · ${activeSummary.images.length} imagen(es)` : ''}
-            {hasFlashcards ? ` · ${activeSummary.flashcards.length} flashcards` : ''}
-            {hasQuestions ? ` · ${activeSummary.questions.length} preguntas` : ''}
+            {wordCount > 0 ? `${wordCount} palabras` : ''}
+            {imageCount > 0 ? ` · ${imageCount} imagen(es)` : ''}
           </p>
         </div>
 
-        {/* Edit icon button — always visible so user can add content manually too */}
-        <button
-          onClick={() => setEditorOpen(true)}
-          title="Ver y editar flashcards y preguntas"
-          style={{
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 7, flexShrink: 0, alignItems: 'center' }}>
+          {/* Flashcards overlay button */}
+          <button
+            onClick={() => setOverlay('flashcards')}
+            title="Flashcards"
+            style={iconBtnStyle(false)}
+          >
+            <FlashcardIcon size={16} color="var(--text-dark)" />
+          </button>
+
+          {/* Quiz overlay button */}
+          <button
+            onClick={() => setOverlay('quiz')}
+            title="Preguntas"
+            style={iconBtnStyle(false)}
+          >
+            <QuizIcon size={16} color="var(--text-dark)" />
+          </button>
+
+          {/* Edit button */}
+          <button
+            onClick={() => setEditorOpen(true)}
+            title="Ver y editar flashcards y preguntas"
+            style={{
+              ...iconBtnStyle(false),
+              borderColor: hasContent ? 'var(--driftwood)' : 'var(--soft-grey)',
+              color: hasContent ? 'var(--driftwood)' : 'var(--text-light)',
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M11.5 1.5a1.5 1.5 0 012.12 2.12L5 12.24 2 13l.76-3L11.5 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Concept map is always the primary view */}
+      <ConceptMapMode summary={activeSummary} />
+
+      {/* Flashcards / Quiz overlay */}
+      {overlay && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'var(--ghost-white)',
+          overflow: 'auto',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Overlay header */}
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 1,
+            background: 'var(--ghost-white)',
+            borderBottom: '1px solid var(--whisper-grey)',
+            padding: '14px 20px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             flexShrink: 0,
-            width: 36, height: 36, borderRadius: 10,
-            border: `1.5px solid ${hasContent ? 'var(--driftwood)' : 'var(--soft-grey)'}`,
-            background: 'transparent',
-            color: hasContent ? 'var(--driftwood)' : 'var(--text-light)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-            <path d="M11.5 1.5a1.5 1.5 0 012.12 2.12L5 12.24 2 13l.76-3L11.5 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* Mode tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 32, flexWrap: 'wrap' }}>
-        {MODES.map(m => {
-          const disabled = m.id === 'images' && (activeSummary.images || []).length === 0;
-          const active = activeMode === m.id;
-          const iconColor = active ? 'white' : disabled ? 'var(--text-light)' : 'var(--text-dark)';
-          return (
+          }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', margin: 0 }}>
+                {overlay === 'flashcards' ? 'Flashcards' : 'Preguntas'}
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--text-light)', margin: 0 }}>
+                {activeSummary.title}
+              </p>
+            </div>
             <button
-              key={m.id}
-              onClick={() => !disabled && setActiveMode(m.id)}
-              disabled={disabled}
+              onClick={() => setOverlay(null)}
               style={{
-                padding: '11px 20px', borderRadius: 'var(--radius-lg)',
-                background: active
-                  ? 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))'
-                  : 'var(--pale-mist)',
-                border: `1.5px solid ${active ? 'transparent' : 'var(--whisper-grey)'}`,
-                color: iconColor,
-                fontSize: 14, fontWeight: active ? 500 : 400,
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                transition: 'var(--transition)', opacity: disabled ? 0.4 : 1,
-                display: 'flex', alignItems: 'center', gap: 7,
+                width: 36, height: 36, borderRadius: 10,
+                border: '1.5px solid var(--soft-grey)',
+                background: 'transparent',
+                color: 'var(--text-dark)',
+                fontSize: 18, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.15s',
               }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--soft-grey)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <m.Icon size={16} color={iconColor} />
-              <span>{m.label}</span>
+              ✕
             </button>
-          );
-        })}
-      </div>
+          </div>
 
-      {!activeMode && <ModeSelector setActiveMode={setActiveMode} hasImages={(activeSummary.images || []).length > 0} />}
-      {activeMode === 'flashcards' && <FlashcardsMode summary={activeSummary} />}
-      {activeMode === 'quiz' && <QuizMode summary={activeSummary} />}
-      {activeMode === 'map' && <ConceptMapMode summary={activeSummary} />}
-      {activeMode === 'images' && <ImagesMode images={activeSummary.images} />}
+          {/* Overlay content */}
+          <div style={{ padding: '24px 20px', flex: 1 }}>
+            {overlay === 'flashcards' && <FlashcardsMode summary={activeSummary} />}
+            {overlay === 'quiz' && <QuizMode summary={activeSummary} />}
+          </div>
+        </div>
+      )}
 
-      {editorOpen && <ContentEditorPanel open={true} onClose={() => setEditorOpen(false)} summary={activeSummary} />}
+      {editorOpen && (
+        <ContentEditorPanel open={true} onClose={() => setEditorOpen(false)} summary={activeSummary} />
+      )}
     </div>
   );
 }
 
-function ModeSelector({ setActiveMode, hasImages }) {
-  const modes = [
-    { id: 'flashcards', Icon: FlashcardIcon, label: 'Flashcards', desc: 'Tarjetas para memorizar definiciones y conceptos clave' },
-    { id: 'quiz', Icon: QuizIcon, label: 'Preguntas rápidas', desc: 'Test de opción múltiple basado en tu resumen' },
-    { id: 'map', Icon: MapIcon, label: 'Mapa conceptual', desc: 'Visualización interactiva de las ideas principales' },
-    ...(hasImages ? [{ id: 'images', Icon: GalleryIcon, label: 'Galería', desc: 'Explora las imágenes extraídas del resumen' }] : []),
-  ];
-  return (
-    <div>
-      <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 20 }}>¿Cómo quieres estudiar hoy?</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-        {modes.map(m => <ModeCard key={m.id} mode={m} onClick={() => setActiveMode(m.id)} />)}
-      </div>
-    </div>
-  );
-}
-
-function ModeCard({ mode, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        padding: '28px 20px', borderRadius: 'var(--radius-md)',
-        background: hovered ? 'var(--soft-grey)' : 'var(--pale-mist)',
-        border: `1.5px solid ${hovered ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
-        cursor: 'pointer', transition: 'var(--transition)',
-        boxShadow: hovered ? 'var(--shadow-card)' : 'none',
-        transform: hovered ? 'translateY(-2px)' : 'none',
-        textAlign: 'left',
-      }}
-    >
-      <div style={{ marginBottom: 14 }}><mode.Icon size={28} color="var(--text-mid)" /></div>
-      <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6 }}>{mode.label}</div>
-      <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5 }}>{mode.desc}</div>
-    </button>
-  );
+function iconBtnStyle() {
+  return {
+    width: 36, height: 36, borderRadius: 10,
+    border: '1.5px solid var(--soft-grey)',
+    background: 'transparent',
+    color: 'var(--text-dark)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', transition: 'background 0.15s',
+  };
 }

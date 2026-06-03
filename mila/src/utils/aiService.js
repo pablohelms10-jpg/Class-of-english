@@ -126,12 +126,20 @@ function distributeImages(count, selected) {
 }
 
 // Returns { cards, allCovered }
-export async function generateFlashcardsAI(text, existing = [], images = []) {
+export async function generateFlashcardsAI(text, existing = [], images = [], nodes = []) {
   const existingList = existing.length > 0
     ? `\nFLASHCARDS YA CREADAS (NO repetir):\n${existing.map(c => `- ${c.front}`).join('\n')}\n`
     : '';
 
-  const prompt = `Eres un profesor de medicina. Genera 10 flashcards NUEVAS del resumen.${existingList}
+  const nodesSection = nodes.length > 0
+    ? `\nCONCEPTOS DEL MAPA (asigná uno como "conceptLabel" de cada flashcard):\n${nodes.map(n => `- "${n.label}"`).join('\n')}\n`
+    : '';
+
+  const conceptLabelField = nodes.length > 0
+    ? `\n    "conceptLabel": "Nombre del concepto del mapa al que pertenece esta flashcard",`
+    : '';
+
+  const prompt = `Eres un profesor de medicina. Genera 10 flashcards NUEVAS del resumen.${existingList}${nodesSection}
 RESUMEN:
 ${smartSample(text)}
 
@@ -141,7 +149,7 @@ Si quedan temas, responde SOLO con JSON array:
 [
   {
     "front": "¿Pregunta específica y clara?",
-    "back": "Respuesta concisa y precisa",
+    "back": "Respuesta concisa y precisa",${conceptLabelField}
     "context": "Frase del texto que respalda esto"
   }
 ]
@@ -167,12 +175,20 @@ Reglas: NO repetir temas ya cubiertos. Preguntas sobre definiciones, funciones, 
 }
 
 // Returns { questions, allCovered }
-export async function generateQuestionsAI(text, existing = [], images = []) {
+export async function generateQuestionsAI(text, existing = [], images = [], nodes = []) {
   const existingList = existing.length > 0
     ? `\nPREGUNTAS YA CREADAS (NO repetir):\n${existing.map(q => `- ${q.question}`).join('\n')}\n`
     : '';
 
-  const prompt = `Eres un profesor de medicina. Genera 8 preguntas de opción múltiple NUEVAS.${existingList}
+  const nodesSection = nodes.length > 0
+    ? `\nCONCEPTOS DEL MAPA (asigná uno como "conceptLabel" de cada pregunta):\n${nodes.map(n => `- "${n.label}"`).join('\n')}\n`
+    : '';
+
+  const conceptLabelField = nodes.length > 0
+    ? `\n    "conceptLabel": "Nombre del concepto del mapa al que pertenece esta pregunta",`
+    : '';
+
+  const prompt = `Eres un profesor de medicina. Genera 8 preguntas de opción múltiple NUEVAS.${existingList}${nodesSection}
 RESUMEN:
 ${smartSample(text)}
 
@@ -181,7 +197,7 @@ Si ya se cubrieron TODOS los temas, responde exactamente: {"allCovered": true}
 Si quedan temas, responde SOLO con JSON array:
 [
   {
-    "question": "Pregunta clara",
+    "question": "Pregunta clara",${conceptLabelField}
     "options": ["A", "B", "C", "D"],
     "correct": "Opción correcta exacta",
     "explanation": "Por qué es correcta"
