@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMila } from '../../context/MilaContext';
-import { generateConceptMapAI, assignImagesToNodes } from '../../utils/aiService';
+import { generateConceptMapAI, assignImagesToNodes, quickAssignImages } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
@@ -38,24 +38,57 @@ export default function ConceptMapMode({ summary }) {
   const [dragging, setDragging] = useState(null);
   const containerRef = useRef(null);
 
-  async function applyMap(data) {
+  function applyNodes(nodes) {
+    const p = {};
+    nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+    setPositions(p);
+  }
+
+  function applyMap(data) {
+    // Step 1: show map immediately with distributed images (no API)
     let nodes = data.nodes;
     if (images.length > 0) {
-      try { nodes = await assignImagesToNodes(nodes, images); } catch { /* keep without images */ }
+      const qi = quickAssignImages(nodes.length, images);
+      nodes = nodes.map((n, i) => ({ ...n, imageIndex: qi[i] ?? null }));
     }
-    const finalData = { ...data, nodes };
-    setMapData(finalData);
-    const p = {};
-    finalData.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
-    setPositions(p);
-    updateSummary(summary.id, { conceptMap: finalData });
+    const quick = { ...data, nodes };
+    setMapData(quick);
+    applyNodes(quick.nodes);
+    updateSummary(summary.id, { conceptMap: quick });
+    // Step 2: async AI matching to refine in background
+    if (images.length > 0) {
+      assignImagesToNodes(nodes, images)
+        .then(withImg => {
+          const refined = { ...quick, nodes: withImg };
+          setMapData(refined);
+          updateSummary(summary.id, { conceptMap: refined });
+        })
+        .catch(() => {});
+    }
   }
 
   useEffect(() => {
-    if (cached) return;
+    if (cached) {
+      // Auto-upgrade cached map if nodes are missing imageIndex
+      if (images.length > 0 && cached.nodes && !cached.nodes.some(n => n.imageIndex != null)) {
+        const qi = quickAssignImages(cached.nodes.length, images);
+        const upgraded = { ...cached, nodes: cached.nodes.map((n, i) => ({ ...n, imageIndex: qi[i] ?? null })) };
+        setMapData(upgraded);
+        applyNodes(upgraded.nodes);
+        updateSummary(summary.id, { conceptMap: upgraded });
+        assignImagesToNodes(upgraded.nodes, images)
+          .then(withImg => {
+            const refined = { ...upgraded, nodes: withImg };
+            setMapData(refined);
+            updateSummary(summary.id, { conceptMap: refined });
+          })
+          .catch(() => {});
+      }
+      return;
+    }
     setLoading(true);
     generateConceptMapAI(text)
-      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); return applyMap(data); })
+      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -68,7 +101,7 @@ export default function ConceptMapMode({ summary }) {
     setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
     generateConceptMapAI(text)
-      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); return applyMap(data); })
+      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
   }
