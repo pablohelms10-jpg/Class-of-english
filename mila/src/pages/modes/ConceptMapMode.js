@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { useMila } from '../../context/MilaContext';
-import { generateConceptMapAI, assignImagesToNodes, quickAssignImages } from '../../utils/aiService';
+import { generateConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
@@ -9,11 +10,101 @@ const NODE_W = 270;
 const CANVAS_W = 1400;
 const CANVAS_H = 1000;
 
+// Mini flashcard component with its own flip state
+function MiniFlashcard({ card }) {
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <div
+      onClick={e => { e.stopPropagation(); setFlipped(f => !f); }}
+      style={{
+        marginTop: 10,
+        borderRadius: 8,
+        border: '1px solid var(--soft-grey)',
+        background: flipped ? 'var(--pale-mist)' : 'var(--ghost-white)',
+        padding: '9px 10px',
+        cursor: 'pointer',
+        transition: 'background 0.2s',
+        userSelect: 'none',
+      }}
+    >
+      <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 4, fontWeight: 500 }}>
+        {flipped ? 'Respuesta' : 'Flashcard · tocá para ver'}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5 }}>
+        {flipped ? card.back : card.front}
+      </div>
+      {flipped && card.context && (
+        <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 5, fontStyle: 'italic', lineHeight: 1.4 }}>
+          {card.context}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mini question component with its own selected state
+function MiniQuestion({ question }) {
+  const [selected, setSelected] = useState(null);
+  const options = question.options || [];
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        marginTop: 10,
+        borderRadius: 8,
+        border: '1px solid var(--soft-grey)',
+        background: 'var(--ghost-white)',
+        padding: '9px 10px',
+        userSelect: 'none',
+      }}
+    >
+      <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 5, fontWeight: 500 }}>Pregunta</div>
+      <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5, marginBottom: 7 }}>{question.question}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {options.map((opt, i) => {
+          const isCorrect = opt === question.correct;
+          const isSelected = selected === opt;
+          let bg = 'transparent';
+          let borderColor = 'var(--soft-grey)';
+          let color = 'var(--text-dark)';
+          if (selected) {
+            if (isCorrect) { bg = '#d4edda'; borderColor = '#7BAE7F'; color = '#2d6a33'; }
+            else if (isSelected) { bg = '#fde8e8'; borderColor = '#e57373'; color = '#b71c1c'; }
+          }
+          return (
+            <button
+              key={i}
+              onClick={() => { if (!selected) setSelected(opt); }}
+              style={{
+                textAlign: 'left', padding: '5px 8px', borderRadius: 6,
+                border: `1px solid ${borderColor}`,
+                background: bg, color, fontSize: 10, lineHeight: 1.4,
+                cursor: selected ? 'default' : 'pointer',
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {selected && question.explanation && (
+        <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>
+          {question.explanation}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConceptMapMode({ summary }) {
   const { updateSummary } = useMila();
   const text = summary?.text || '';
   const images = summary?.images || [];
   const cached = summary?.conceptMap;
+  const masteredNodes = summary?.masteredNodes || {};
+  const flashcards = summary?.flashcards || [];
+  const questions = summary?.questions || [];
 
   const [mapData, setMapData] = useState(cached || null);
   const [loading, setLoading] = useState(!cached);
@@ -73,6 +164,16 @@ export default function ConceptMapMode({ summary }) {
     if (images.length > 0) {
       assignImagesToNodes(nodes, images)
         .then(withImg => { const r = { ...quick, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
+        .catch(() => {});
+    }
+    // Auto-generate tagged flashcards + questions if not yet done
+    const hasTagged = (summary.flashcards || []).some(f => f.conceptLabel);
+    if (!hasTagged && text) {
+      generateFlashcardsAI(text, [], images, nodes)
+        .then(({ cards }) => updateSummary(summary.id, { flashcards: cards }))
+        .catch(() => {});
+      generateQuestionsAI(text, [], images, nodes)
+        .then(({ questions: qs }) => updateSummary(summary.id, { questions: qs }))
         .catch(() => {});
     }
   }
@@ -148,6 +249,7 @@ export default function ConceptMapMode({ summary }) {
     let touchMoved = false;
 
     function handleTouchStart(e) {
+      // passive:false but do NOT call preventDefault here — just record positions
       touchMoved = false;
       if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
       velocityRef.current = { x: 0, y: 0 };
@@ -170,7 +272,6 @@ export default function ConceptMapMode({ summary }) {
       lastTouchTimeRef.current = now;
 
       if (touches.length === 2 && lastTouches.length === 2) {
-        // Pinch zoom + simultaneous pan
         const prevDist = Math.hypot(lastTouches[1].x - lastTouches[0].x, lastTouches[1].y - lastTouches[0].y);
         const nextDist = Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y);
         const factor = prevDist > 0 ? nextDist / prevDist : 1;
@@ -183,9 +284,8 @@ export default function ConceptMapMode({ summary }) {
         const newPan = { x: p.x + dx, y: p.y + dy };
         panRef.current = newPan;
         setPan(newPan);
-        velocityRef.current = { x: 0, y: 0 }; // no momentum on pinch
+        velocityRef.current = { x: 0, y: 0 };
       } else if (touches.length === 1 && lastTouches.length === 1) {
-        // Single finger pan with velocity tracking
         const dx = touches[0].x - lastTouches[0].x;
         const dy = touches[0].y - lastTouches[0].y;
         velocityRef.current = { x: (dx / dt) * 16, y: (dy / dt) * 16 };
@@ -200,7 +300,6 @@ export default function ConceptMapMode({ summary }) {
 
     function handleTouchEnd(e) {
       if (!touchMoved) { lastTouches = null; return; }
-      // Apply momentum inertia on release
       const { x: vx, y: vy } = velocityRef.current;
       if (Math.abs(vx) > 1 || Math.abs(vy) > 1) {
         let vel = { x: vx, y: vy };
@@ -221,7 +320,7 @@ export default function ConceptMapMode({ summary }) {
     }
 
     el.addEventListener('wheel', handleWheel, { passive: false });
-    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
     el.addEventListener('touchmove', handleTouchMove, { passive: false });
     el.addEventListener('touchend', handleTouchEnd, { passive: false });
     return () => {
@@ -232,7 +331,6 @@ export default function ConceptMapMode({ summary }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mouse pan on empty canvas
   const onCanvasPanStart = useCallback(e => {
     if (dragging) return;
     if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
@@ -281,6 +379,11 @@ export default function ConceptMapMode({ summary }) {
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
+  function toggleMastered(nodeId) {
+    const updated = { ...masteredNodes, [nodeId]: !masteredNodes[nodeId] };
+    updateSummary(summary.id, { masteredNodes: updated });
+  }
+
   if (loading) return <MilaLoadingScreen message="MILA está construyendo el mapa conceptual…" sub="Analizando el contenido…" />;
 
   if (!mapData || !mapData.nodes?.length) return (
@@ -296,13 +399,33 @@ export default function ConceptMapMode({ summary }) {
   const nodes = mapData.nodes;
   const edges = mapData.edges || [];
 
-  return (
-    <div style={isFullscreen ? {
-      position: 'fixed', inset: 0, zIndex: 9998,
-      background: 'var(--pale-mist)',
-      display: 'flex', flexDirection: 'column',
-      padding: '10px',
-    } : {}}>
+  // Progress bar stats
+  const masteredCount = nodes.filter(n => masteredNodes[n.id]).length;
+  const totalCount = nodes.length;
+  const progressPct = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
+
+  const mapContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: isFullscreen ? '100%' : undefined }}>
+
+      {/* Progress bar */}
+      <div style={{ marginBottom: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
+            {masteredCount} / {totalCount} conceptos dominados
+          </span>
+        </div>
+        <div style={{ height: 4, borderRadius: 2, background: 'var(--whisper-grey)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${progressPct}%`,
+            background: progressPct === 100
+              ? '#7BAE7F'
+              : 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))',
+            borderRadius: 2,
+            transition: 'width 0.4s ease',
+          }} />
+        </div>
+      </div>
 
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0 }}>
@@ -319,7 +442,7 @@ export default function ConceptMapMode({ summary }) {
           <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto' }}>↺ Regenerar</button>
           <button
             onClick={() => setIsFullscreen(f => !f)}
-            title={isFullscreen ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
             style={{ ...toolBtnStyle, fontSize: 17, width: 32, padding: 0 }}
           >
             {isFullscreen ? '✕' : '⛶'}
@@ -395,6 +518,20 @@ export default function ConceptMapMode({ summary }) {
             const isMain = node.type === 'main';
             const isSub = node.type === 'sub';
             const img = node.imageIndex != null && node.imageIndex >= 0 && images[node.imageIndex] ? images[node.imageIndex] : null;
+            const isMastered = !!masteredNodes[node.id];
+
+            // Dot color: green if mastered, else default
+            const dotColor = isMastered
+              ? '#7BAE7F'
+              : isMain
+                ? 'rgba(255,255,255,0.7)'
+                : isSub
+                  ? 'var(--driftwood)'
+                  : 'var(--whisper-grey)';
+
+            // Find linked flashcard and question for this node
+            const linkedCard = flashcards.find(f => f.conceptLabel === node.label) || null;
+            const linkedQuestion = questions.find(q => q.conceptLabel === node.label) || null;
 
             return (
               <div key={node.id} style={{
@@ -415,7 +552,7 @@ export default function ConceptMapMode({ summary }) {
                   onClick={() => toggleExpand(node.id)}
                   style={{ padding: '10px 12px', cursor: 'grab', display: 'flex', alignItems: 'flex-start', gap: 8, userSelect: 'none' }}
                 >
-                  <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.7)' : isSub ? 'var(--driftwood)' : 'var(--whisper-grey)' }} />
+                  <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: dotColor, transition: 'background 0.3s' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: isMain ? 'white' : 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
                     <div style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.72)' : 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
@@ -443,6 +580,36 @@ export default function ConceptMapMode({ summary }) {
                           ))}
                         </ul>
                       )}
+
+                      {/* Inline mini flashcard */}
+                      {linkedCard && <MiniFlashcard card={linkedCard} />}
+
+                      {/* Inline mini question */}
+                      {linkedQuestion && <MiniQuestion question={linkedQuestion} />}
+
+                      {/* Mastery button */}
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleMastered(node.id); }}
+                        style={{
+                          marginTop: 12,
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: 7,
+                          border: `1.5px solid ${isMastered ? '#7BAE7F' : 'var(--soft-grey)'}`,
+                          background: isMastered ? '#eaf4eb' : 'transparent',
+                          color: isMastered ? '#2d6a33' : 'var(--text-light)',
+                          fontSize: 11,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        {isMastered ? '✓ Dominado' : 'Marcar como dominado'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -491,6 +658,22 @@ export default function ConceptMapMode({ summary }) {
       )}
     </div>
   );
+
+  if (isFullscreen) {
+    return ReactDOM.createPortal(
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 99999,
+        background: 'var(--pale-mist)',
+        display: 'flex', flexDirection: 'column',
+        padding: '10px',
+      }}>
+        {mapContent}
+      </div>,
+      document.body
+    );
+  }
+
+  return mapContent;
 }
 
 const toolBtnStyle = {
