@@ -53,91 +53,92 @@ export async function extractFromPDF(file, onProgress) {
 // discarding slide titles and bullet-point text. Falls back to a full-page thumbnail if
 // the page has no embedded image XObjects (e.g. pure-text pages).
 async function extractDiagramFromPage(page, pdfjsLib) {
-  const OPS = pdfjsLib.OPS;
-
-  // Walk operator list to find paintImageXObject calls and their current transform
-  const opList = await page.getOperatorList();
-  let ctm = [1, 0, 0, 1, 0, 0];
-  const ctmStack = [];
-  const imageRects = [];
-
-  for (let i = 0; i < opList.fnArray.length; i++) {
-    const fn = opList.fnArray[i];
-    const args = opList.argsArray[i];
-
-    if (fn === OPS.save) {
-      ctmStack.push([...ctm]);
-    } else if (fn === OPS.restore) {
-      if (ctmStack.length) ctm = ctmStack.pop();
-    } else if (fn === OPS.transform) {
-      const [a, b, c, d, e, f] = args;
-      ctm = [
-        ctm[0]*a + ctm[2]*b, ctm[1]*a + ctm[3]*b,
-        ctm[0]*c + ctm[2]*d, ctm[1]*c + ctm[3]*d,
-        ctm[0]*e + ctm[2]*f + ctm[4], ctm[1]*e + ctm[3]*f + ctm[5],
-      ];
-    } else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
-      // Image unit square [0,0]→[1,1] mapped through current CTM
-      const pts = [[0,0],[1,0],[0,1],[1,1]].map(([x, y]) => [
-        ctm[0]*x + ctm[2]*y + ctm[4],
-        ctm[1]*x + ctm[3]*y + ctm[5],
-      ]);
-      const xs = pts.map(p => p[0]);
-      const ys = pts.map(p => p[1]);
-      imageRects.push({
-        x: Math.min(...xs), y: Math.min(...ys),
-        w: Math.max(...xs) - Math.min(...xs),
-        h: Math.max(...ys) - Math.min(...ys),
-      });
-    }
-  }
-
-  // Render full page at 1.5× for quality
-  const viewport = page.getViewport({ scale: 1.5 });
+  // Render first (at moderate scale to limit memory use)
+  const viewport = page.getViewport({ scale: 1.2 });
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-  if (imageRects.length === 0) {
-    // No embedded images — thumbnail the whole page
-    const MAX = 600;
-    const ratio = Math.min(MAX / canvas.width, MAX / canvas.height, 1);
-    const out = document.createElement('canvas');
-    out.width = Math.round(canvas.width * ratio);
-    out.height = Math.round(canvas.height * ratio);
-    out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
-    return out.toDataURL('image/jpeg', 0.7);
-  }
+  let cropResult = null;
 
-  // Crop to the largest embedded image
-  const largest = imageRects.reduce((best, r) => r.w * r.h > best.w * best.h ? r : best);
+  try {
+    const OPS = pdfjsLib.OPS;
+    if (!OPS || !OPS.paintImageXObject) throw new Error('OPS unavailable');
 
-  // Convert PDF coordinates → canvas pixels via the viewport transform matrix
-  const [vsx, vshx, vshy, vsy, vtx, vty] = viewport.transform;
-  const toPx = (px, py) => [vsx*px + vshx*py + vtx, vshy*px + vsy*py + vty];
-  const corners = [
-    toPx(largest.x, largest.y),
-    toPx(largest.x + largest.w, largest.y),
-    toPx(largest.x, largest.y + largest.h),
-    toPx(largest.x + largest.w, largest.y + largest.h),
-  ];
-  const cxs = corners.map(c => c[0]);
-  const cys = corners.map(c => c[1]);
+    const opList = await page.getOperatorList();
+    let ctm = [1, 0, 0, 1, 0, 0];
+    const ctmStack = [];
+    const imageRects = [];
 
-  const pad = 8;
-  const cx = Math.max(0, Math.round(Math.min(...cxs) - pad));
-  const cy = Math.max(0, Math.round(Math.min(...cys) - pad));
-  const cw = Math.min(canvas.width, Math.round(Math.max(...cxs) + pad)) - cx;
-  const ch = Math.min(canvas.height, Math.round(Math.max(...cys) + pad)) - cy;
+    for (let i = 0; i < opList.fnArray.length; i++) {
+      const fn = opList.fnArray[i];
+      const args = opList.argsArray[i];
 
-  if (cw < 30 || ch < 30) return canvas.toDataURL('image/jpeg', 0.7);
+      if (fn === OPS.save) {
+        ctmStack.push([...ctm]);
+      } else if (fn === OPS.restore) {
+        if (ctmStack.length) ctm = ctmStack.pop();
+      } else if (fn === OPS.transform) {
+        const [a, b, c, d, e, f] = args;
+        ctm = [
+          ctm[0]*a + ctm[2]*b, ctm[1]*a + ctm[3]*b,
+          ctm[0]*c + ctm[2]*d, ctm[1]*c + ctm[3]*d,
+          ctm[0]*e + ctm[2]*f + ctm[4], ctm[1]*e + ctm[3]*f + ctm[5],
+        ];
+      } else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject) {
+        const pts = [[0,0],[1,0],[0,1],[1,1]].map(([x, y]) => [
+          ctm[0]*x + ctm[2]*y + ctm[4],
+          ctm[1]*x + ctm[3]*y + ctm[5],
+        ]);
+        const xs = pts.map(p => p[0]);
+        const ys = pts.map(p => p[1]);
+        imageRects.push({
+          x: Math.min(...xs), y: Math.min(...ys),
+          w: Math.max(...xs) - Math.min(...xs),
+          h: Math.max(...ys) - Math.min(...ys),
+        });
+      }
+    }
 
+    if (imageRects.length > 0) {
+      const largest = imageRects.reduce((best, r) => r.w * r.h > best.w * best.h ? r : best);
+      const [vsx, vshx, vshy, vsy, vtx, vty] = viewport.transform;
+      const toPx = (px, py) => [vsx*px + vshx*py + vtx, vshy*px + vsy*py + vty];
+      const corners = [
+        toPx(largest.x, largest.y),
+        toPx(largest.x + largest.w, largest.y),
+        toPx(largest.x, largest.y + largest.h),
+        toPx(largest.x + largest.w, largest.y + largest.h),
+      ];
+      const cxs = corners.map(c => c[0]);
+      const cys = corners.map(c => c[1]);
+      const pad = 8;
+      const cx = Math.max(0, Math.round(Math.min(...cxs) - pad));
+      const cy = Math.max(0, Math.round(Math.min(...cys) - pad));
+      const cw = Math.min(canvas.width, Math.round(Math.max(...cxs) + pad)) - cx;
+      const ch = Math.min(canvas.height, Math.round(Math.max(...cys) + pad)) - cy;
+
+      if (cw >= 30 && ch >= 30) {
+        const out = document.createElement('canvas');
+        out.width = cw;
+        out.height = ch;
+        out.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch);
+        cropResult = out.toDataURL('image/jpeg', 0.85);
+      }
+    }
+  } catch { /* fall through to full-page thumbnail */ }
+
+  if (cropResult) return cropResult;
+
+  // Fallback: thumbnail the whole page
+  const MAX = 600;
+  const ratio = Math.min(MAX / canvas.width, MAX / canvas.height, 1);
   const out = document.createElement('canvas');
-  out.width = cw;
-  out.height = ch;
-  out.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch);
-  return out.toDataURL('image/jpeg', 0.85);
+  out.width = Math.round(canvas.width * ratio);
+  out.height = Math.round(canvas.height * ratio);
+  out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
+  return out.toDataURL('image/jpeg', 0.7);
 }
 
 export async function renderPDFPage(file, pageNum) {
