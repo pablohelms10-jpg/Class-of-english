@@ -8,6 +8,7 @@ export default function QuizMode({ summary }) {
   const { updateSummary } = useMila();
   const text = summary?.text || '';
   const cached = summary?.questions;
+  const quizHistory = summary?.quizHistory || [];
 
   const [questions, setQuestions] = useState(cached || []);
   const [loading, setLoading] = useState(!cached || cached.length === 0);
@@ -69,7 +70,21 @@ export default function QuizMode({ summary }) {
       <div style={{ textAlign: 'center', padding: '48px 0' }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>{pct >= 70 ? '🏆' : '📖'}</div>
         <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>{score} / {answers.length} correctas</h3>
-        <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 32 }}>{pct}% de acierto</p>
+        <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 16 }}>{pct}% de acierto</p>
+
+        {/* Quiz history */}
+        {quizHistory.length > 0 && (
+          <div style={{ marginBottom: 28, maxWidth: 380, margin: '0 auto 28px' }}>
+            <p style={{ fontSize: 11, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Historial</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {quizHistory.slice(0, 5).map((h, i) => (
+                <div key={i} style={{ padding: '6px 12px', borderRadius: 20, background: h.pct >= 70 ? 'rgba(123,174,127,0.12)' : 'var(--pale-mist)', border: `1px solid ${h.pct >= 70 ? 'rgba(123,174,127,0.3)' : 'var(--whisper-grey)'}`, fontSize: 12, color: 'var(--text-mid)' }}>
+                  {h.pct}% · {new Date(h.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{ textAlign: 'left', maxWidth: 500, margin: '0 auto 32px' }}>
           {answers.map((a, i) => (
@@ -121,8 +136,14 @@ export default function QuizMode({ summary }) {
 
   function handleNext() {
     setSelected(null);
-    if (index + 1 >= questions.length) setDone(true);
-    else setIndex(i => i + 1);
+    if (index + 1 >= questions.length) {
+      const pct = Math.round(((score + (selected === questions[index].correct ? 1 : 0)) / questions.length) * 100);
+      const entry = { date: new Date().toISOString(), score: score + (selected === questions[index].correct ? 1 : 0), total: questions.length, pct };
+      updateSummary(summary.id, { quizHistory: [entry, ...quizHistory].slice(0, 10) });
+      setDone(true);
+    } else {
+      setIndex(i => i + 1);
+    }
   }
 
   return (

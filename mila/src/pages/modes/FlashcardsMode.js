@@ -9,14 +9,30 @@ export default function FlashcardsMode({ summary }) {
   const text = summary?.text || '';
   const cached = summary?.flashcards;
 
+  // Load saved progress
+  const savedProgress = summary?.flashcardProgress || { known: [], unknown: [], index: 0 };
+
   const [cards, setCards] = useState(cached || []);
   const [loading, setLoading] = useState(!cached || cached.length === 0);
   const [generating, setGenerating] = useState(false);
   const [allCovered, setAllCovered] = useState(summary?.flashcardsAllCovered || false);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(savedProgress.index || 0);
   const [flipped, setFlipped] = useState(false);
-  const [known, setKnown] = useState(new Set());
-  const [unknown, setUnknown] = useState(new Set());
+  const [known, setKnown] = useState(new Set(savedProgress.known || []));
+  const [unknown, setUnknown] = useState(new Set(savedProgress.unknown || []));
+
+  // Save progress whenever known/unknown/index changes
+  useEffect(() => {
+    if (cards.length === 0) return;
+    updateSummary(summary.id, {
+      flashcardProgress: {
+        known: [...known],
+        unknown: [...unknown],
+        index,
+        updatedAt: new Date().toISOString(),
+      }
+    });
+  }, [known, unknown, index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (cached && cached.length > 0) return;
@@ -53,8 +69,15 @@ export default function FlashcardsMode({ summary }) {
       .finally(() => setGenerating(false));
   }
 
+  function resetProgress() {
+    setIndex(0); setFlipped(false);
+    setKnown(new Set()); setUnknown(new Set());
+  }
+
   if (loading) return <MilaLoadingScreen message="MILA está generando tus flashcards…" sub="Esto puede tomar unos segundos" />;
   if (!text || cards.length === 0) return <EmptyState message="No hay suficiente texto para generar flashcards." />;
+
+  const hasProgress = known.size > 0 || unknown.size > 0;
 
   if (index >= cards.length) {
     const pct = Math.round((known.size / cards.length) * 100);
@@ -64,16 +87,33 @@ export default function FlashcardsMode({ summary }) {
         <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>
           {pct >= 70 ? '¡Buen trabajo!' : 'Sigue practicando'}
         </h3>
-        <p style={{ fontSize: 16, color: 'var(--text-mid)', marginBottom: 32 }}>
+        <p style={{ fontSize: 16, color: 'var(--text-mid)', marginBottom: 8 }}>
           Acertaste <strong>{pct}%</strong> — {known.size} de {cards.length} tarjetas
         </p>
+        <p style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 32 }}>
+          Progreso guardado ✓
+        </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => { setIndex(0); setFlipped(false); setKnown(new Set()); setUnknown(new Set()); }}
-            style={{ padding: '14px 32px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 15, fontWeight: 500 }}
-          >Volver a empezar</button>
+          <button onClick={resetProgress}
+            style={{ padding: '14px 32px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 15, fontWeight: 500 }}>
+            Volver a empezar
+          </button>
           <GenerateMoreButton allCovered={allCovered} generating={generating} onClick={generateMore} />
         </div>
+
+        {unknown.size > 0 && (
+          <div style={{ marginTop: 40, textAlign: 'left', maxWidth: 500, margin: '40px auto 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Para repasar ({unknown.size})
+            </p>
+            {cards.filter(c => unknown.has(c.id)).map((c, i) => (
+              <div key={i} style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--pale-mist)', border: '1px solid var(--whisper-grey)', marginBottom: 8 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-dark)', fontWeight: 500, marginBottom: 4 }}>{c.front}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-light)' }}>{c.back}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -83,7 +123,8 @@ export default function FlashcardsMode({ summary }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      {/* Progress bar + stats */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--text-light)' }}>{index + 1} / {cards.length}</span>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 12, color: '#7BAE7F' }}>✓ {known.size}</span>
@@ -92,9 +133,19 @@ export default function FlashcardsMode({ summary }) {
         </div>
       </div>
 
-      {allCovered && (
-        <AllCoveredBanner type="flashcards" count={cards.length} />
+      {/* Saved progress indicator */}
+      {hasProgress && index < cards.length && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
+            Progreso guardado — podés cerrar y continuar aquí
+          </span>
+          <button onClick={resetProgress} style={{ fontSize: 11, color: 'var(--text-light)', padding: '2px 8px', borderRadius: 6, border: '1px solid var(--whisper-grey)', background: 'transparent' }}>
+            Reiniciar
+          </button>
+        </div>
       )}
+
+      {allCovered && <AllCoveredBanner type="flashcards" count={cards.length} />}
 
       <div style={{ height: 4, background: 'var(--soft-grey)', borderRadius: 4, marginBottom: 32, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${progress * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />
@@ -116,6 +167,12 @@ export default function FlashcardsMode({ summary }) {
         <div style={{ position: 'absolute', top: 16, right: 20, fontSize: 11, color: flipped ? 'rgba(255,255,255,0.6)' : 'var(--text-light)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
           {flipped ? 'Respuesta' : 'Pregunta · toca para ver'}
         </div>
+        {known.has(card.id) && !flipped && (
+          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, color: '#7BAE7F' }}>✓ Ya la sabés</div>
+        )}
+        {unknown.has(card.id) && !flipped && (
+          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, color: 'var(--ash-plum)' }}>✗ Para repasar</div>
+        )}
         {!flipped ? (
           <p style={{ fontSize: 18, color: 'var(--text-dark)', textAlign: 'center', lineHeight: 1.7 }}>{card.front}</p>
         ) : (
@@ -157,44 +214,19 @@ export default function FlashcardsMode({ summary }) {
 function GenerateMoreButton({ allCovered, generating, onClick, small }) {
   if (allCovered) return null;
   return (
-    <button
-      onClick={onClick}
-      disabled={generating}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: small ? '3px 10px' : '12px 22px',
-        borderRadius: small ? 6 : 'var(--radius-lg)',
-        border: '1.5px solid var(--driftwood)',
-        color: 'var(--driftwood)', background: 'transparent',
-        fontSize: small ? 11 : 14, fontWeight: 500,
-        opacity: generating ? 0.6 : 1, cursor: generating ? 'default' : 'pointer',
-        transition: 'all 0.2s',
-      }}
-    >
-      {generating ? (
-        <>
-          <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: small ? 11 : 14 }}>↻</span>
-          {!small && ' Generando…'}
-        </>
-      ) : (
-        <>{small ? '+ Más' : '+ Generar más'}</>
-      )}
-      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+    <button onClick={onClick} disabled={generating}
+      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: small ? '3px 10px' : '12px 22px', borderRadius: small ? 6 : 'var(--radius-lg)', border: '1.5px solid var(--driftwood)', color: 'var(--driftwood)', background: 'transparent', fontSize: small ? 11 : 14, fontWeight: 500, opacity: generating ? 0.6 : 1, cursor: generating ? 'default' : 'pointer' }}>
+      {generating ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>↻</span>{!small && ' Generando…'}</> : <>{small ? '+ Más' : '+ Generar más'}</>}
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </button>
   );
 }
 
 function AllCoveredBanner({ type, count }) {
   return (
-    <div style={{
-      marginBottom: 20, padding: '12px 16px', borderRadius: 10,
-      background: 'rgba(123,174,127,0.1)', border: '1px solid rgba(123,174,127,0.35)',
-      display: 'flex', alignItems: 'center', gap: 10,
-    }}>
+    <div style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 10, background: 'rgba(123,174,127,0.1)', border: '1px solid rgba(123,174,127,0.35)', display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 16 }}>✅</span>
-      <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>
-        Cubriste todos los temas del resumen — {count} {type} en total. ¡Estás listo!
-      </span>
+      <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>Cubriste todos los temas del resumen — {count} {type} en total. ¡Estás listo!</span>
     </div>
   );
 }
@@ -207,4 +239,3 @@ function EmptyState({ message }) {
     </div>
   );
 }
-
