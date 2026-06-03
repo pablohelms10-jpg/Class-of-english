@@ -26,7 +26,7 @@ export default function QuizMode({ summary }) {
   useEffect(() => {
     if (cached && cached.length > 0) {
       // Auto-assign images to existing questions missing imageIndex
-      if (images.length > 0 && cached.every(q => q.imageIndex === undefined)) {
+      if (images.length > 0 && !cached.some(q => q.imageIndex != null)) {
         const nodes = cached.map(q => ({ id: q.id, label: q.question, summary: q.explanation || '' }));
         assignImagesToNodes(nodes, images)
           .then(withImages => {

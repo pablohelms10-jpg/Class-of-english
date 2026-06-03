@@ -40,7 +40,7 @@ export default function FlashcardsMode({ summary }) {
   useEffect(() => {
     if (cached && cached.length > 0) {
       // Auto-assign images to existing cards that are missing imageIndex
-      if (images.length > 0 && cached.every(c => c.imageIndex === undefined)) {
+      if (images.length > 0 && !cached.some(c => c.imageIndex != null)) {
         const nodes = cached.map(c => ({ id: c.id, label: c.front, summary: c.back }));
         assignImagesToNodes(nodes, images)
           .then(withImages => {
