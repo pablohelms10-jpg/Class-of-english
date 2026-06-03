@@ -133,13 +133,13 @@ export default function QuizMode({ summary }) {
         <div style={{ height: '100%', width: `${(index / questions.length) * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />
       </div>
 
-      <div style={{ padding: '28px 32px', borderRadius: 'var(--radius-md)', background: 'white', border: '1.5px solid var(--soft-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)' }}>
+      <div style={{ padding: '28px 32px', borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)' }}>
         <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7 }}>{q.question}</p>
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
         {q.options.map(option => {
-          let bg = 'rgba(255,255,255,0.7)', border = 'var(--soft-grey)', color = 'var(--text-dark)';
+          let bg = 'var(--pale-mist)', border = 'var(--whisper-grey)', color = 'var(--text-dark)';
           if (selected !== null) {
             if (option === q.correct) { bg = 'rgba(123,174,127,0.12)'; border = 'rgba(123,174,127,0.5)'; color = '#4A8A4E'; }
             else if (option === selected) { bg = 'rgba(176,168,164,0.15)'; border = 'var(--ash-plum)'; color = 'var(--ash-plum)'; }

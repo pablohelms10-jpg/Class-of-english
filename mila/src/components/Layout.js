@@ -21,7 +21,7 @@ export default function Layout({ children }) {
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: `1px solid var(--soft-grey)`,
-        background: 'rgba(250,250,247,0.8)',
+        background: 'var(--ghost-white)',
         backdropFilter: 'blur(12px)',
         position: 'sticky',
         top: 0,

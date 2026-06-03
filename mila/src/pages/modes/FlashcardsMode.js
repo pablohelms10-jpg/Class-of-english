@@ -102,8 +102,8 @@ export default function FlashcardsMode({ summary }) {
         style={{
           minHeight: 240,
           borderRadius: 'var(--radius-lg)',
-          background: flipped ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)' : 'white',
-          border: `1.5px solid ${flipped ? 'transparent' : 'var(--soft-grey)'}`,
+          background: flipped ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)' : 'var(--pale-mist)',
+          border: `1.5px solid ${flipped ? 'transparent' : 'var(--whisper-grey)'}`,
           boxShadow: 'var(--shadow-card)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           padding: 40, cursor: 'pointer',
