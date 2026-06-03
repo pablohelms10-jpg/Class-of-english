@@ -94,7 +94,7 @@ export default function SummaryDetail() {
       {!activeMode && <ModeSelector setActiveMode={setActiveMode} hasImages={(activeSummary.images || []).length > 0} />}
       {activeMode === 'flashcards' && <FlashcardsMode summary={activeSummary} />}
       {activeMode === 'quiz' && <QuizMode summary={activeSummary} />}
-      {activeMode === 'map' && <ConceptMapMode text={activeSummary.text} />}
+      {activeMode === 'map' && <ConceptMapMode summary={activeSummary} />}
       {activeMode === 'images' && <ImagesMode images={activeSummary.images} />}
 
       {editorOpen && <ContentEditorPanel open={true} onClose={() => setEditorOpen(false)} summary={activeSummary} />}

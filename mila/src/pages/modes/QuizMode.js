@@ -20,10 +20,12 @@ export default function QuizMode({ summary }) {
   const [done, setDone] = useState(false);
   const [answers, setAnswers] = useState([]);
 
+  const images = summary?.images || [];
+
   useEffect(() => {
     if (cached && cached.length > 0) return;
     setLoading(true);
-    generateQuestionsAI(text, [])
+    generateQuestionsAI(text, [], images)
       .then(({ questions: generated, allCovered: done }) => {
         setQuestions(generated);
         setAllCovered(done);
@@ -40,7 +42,7 @@ export default function QuizMode({ summary }) {
   function generateMore() {
     if (generating || allCovered) return;
     setGenerating(true);
-    generateQuestionsAI(text, questions)
+    generateQuestionsAI(text, questions, images)
       .then(({ questions: newQs, allCovered: done }) => {
         if (done || newQs.length === 0) {
           setAllCovered(true);
@@ -177,7 +179,10 @@ export default function QuizMode({ summary }) {
       </div>
 
       <div style={{ padding: '28px 32px', borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)' }}>
-        <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7 }}>{q.question}</p>
+        <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7, marginBottom: q.imageIndex != null && images[q.imageIndex] ? 16 : 0 }}>{q.question}</p>
+        {q.imageIndex != null && images[q.imageIndex] && (
+          <img src={images[q.imageIndex].src} alt="" style={{ maxWidth: '100%', maxHeight: 220, borderRadius: 10, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+        )}
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>

@@ -34,10 +34,12 @@ export default function FlashcardsMode({ summary }) {
     });
   }, [known, unknown, index]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const images = summary?.images || [];
+
   useEffect(() => {
     if (cached && cached.length > 0) return;
     setLoading(true);
-    generateFlashcardsAI(text, [])
+    generateFlashcardsAI(text, [], images)
       .then(({ cards: generated, allCovered: done }) => {
         setCards(generated);
         setAllCovered(done);
@@ -54,7 +56,7 @@ export default function FlashcardsMode({ summary }) {
   function generateMore() {
     if (generating || allCovered) return;
     setGenerating(true);
-    generateFlashcardsAI(text, cards)
+    generateFlashcardsAI(text, cards, images)
       .then(({ cards: newCards, allCovered: done }) => {
         if (done || newCards.length === 0) {
           setAllCovered(true);
@@ -176,9 +178,16 @@ export default function FlashcardsMode({ summary }) {
         {!flipped ? (
           <p style={{ fontSize: 18, color: 'var(--text-dark)', textAlign: 'center', lineHeight: 1.7 }}>{card.front}</p>
         ) : (
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 28, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 12 }}>{card.back}</p>
-            {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>{card.context}</p>}
+          <div style={{ textAlign: 'center', width: '100%' }}>
+            <p style={{ fontSize: 24, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 10 }}>{card.back}</p>
+            {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, marginBottom: card.imageIndex != null ? 16 : 0 }}>{card.context}</p>}
+            {card.imageIndex != null && images[card.imageIndex] && (
+              <img
+                src={images[card.imageIndex].src}
+                alt=""
+                style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 10, objectFit: 'contain', background: 'rgba(255,255,255,0.15)', marginTop: 4 }}
+              />
+            )}
           </div>
         )}
       </div>
