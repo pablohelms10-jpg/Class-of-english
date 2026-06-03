@@ -30,23 +30,33 @@ export async function extractFromPDF(file, onProgress) {
 
   const totalPages = Math.min(pdf.numPages, MAX_PDF_PAGES);
   let fullText = '';
+  const images = [];
 
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
+
+    // Extract text
     const textContent = await page.getTextContent();
     fullText += textContent.items.map(item => item.str).join(' ') + '\n\n';
+
+    // Render page to image (max 600px wide, JPEG 0.7)
+    try {
+      const MAX_PX = 600;
+      const vp0 = page.getViewport({ scale: 1 });
+      const scale = Math.min(MAX_PX / vp0.width, MAX_PX / vp0.height, 1.2);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      const src = canvas.toDataURL('image/jpeg', 0.7);
+      images.push({ src, name: `${file.name} — página ${pageNum}` });
+    } catch { /* skip page image if rendering fails */ }
+
     if (onProgress) onProgress(pageNum, totalPages);
   }
 
-  const lazyImages = Array.from({ length: totalPages }, (_, i) => ({
-    src: null,
-    name: `${file.name} — página ${i + 1}`,
-    lazy: true,
-    pdfFile: file,
-    pageNum: i + 1,
-  }));
-
-  return { text: fullText, images: lazyImages, truncated: pdf.numPages > MAX_PDF_PAGES, totalPages: pdf.numPages };
+  return { text: fullText, images, truncated: pdf.numPages > MAX_PDF_PAGES, totalPages: pdf.numPages };
 }
 
 export async function renderPDFPage(file, pageNum) {
