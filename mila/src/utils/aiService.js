@@ -75,45 +75,75 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
   return data.content[0].text;
 }
 
-// Separate step: match images to cards/questions via vision
+// Semantic ranking: for each topic, score ALL available images and pick the best match.
+// Sends batches of up to 8 images per API call, scores each 0-10, selects highest.
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
-  const selected = spreadImages(images, 6);
 
-  const prompt = `Tenés ${selected.length} imágenes anatómicas (índices 0 a ${selected.length - 1}) y ${topics.length} temas médicos.
+  // Use all images (up to 20) spread evenly, keeping original indices
+  const selected = spreadImages(images, Math.min(images.length, 20));
 
-TEMAS:
-${topics.map((t, i) => `${i}: "${t}"`).join('\n')}
+  // Split images into batches of 8 to stay within API limits
+  const BATCH = 8;
+  const batches = [];
+  for (let i = 0; i < selected.length; i += BATCH) {
+    batches.push(selected.slice(i, i + BATCH));
+  }
 
-Para cada tema, asigná el índice de imagen que MEJOR lo representa visualmente.
-REGLAS IMPORTANTES:
-- Asigná SIEMPRE una imagen a cada tema si las imágenes son del mismo tema general
-- Podés repetir el mismo índice en varios temas
-- Solo usá null si el tema es puramente abstracto (ej: fechas, nombres propios sin anatomía)
-- La mayoría de los temas deben tener una imagen asignada
+  // For each topic, find the image with highest relevance score across all batches
+  const results = await Promise.all(topics.map(async (topic, ti) => {
+    let bestScore = -1;
+    let bestOrigIdx = null;
 
-Responde SOLO con JSON (exactamente ${topics.length} valores):
-{"matches": [0, 1, 0, 2, 1, 3, 0, null, 2, 1]}`;
+    for (const batch of batches) {
+      const batchOffset = selected.indexOf(batch[0]);
+      const prompt = `Sos un experto en anatomía. Tenés ${batch.length} imágenes (índices 0–${batch.length - 1}).
 
-  try {
-    const raw = await askClaude(prompt, selected);
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return distributeImages(topics.length, selected);
-    const parsed = JSON.parse(jsonMatch[0]);
-    const matches = parsed.matches || [];
-    const result = matches.map(idx => {
-      if (idx == null || idx === 'null') return null;
-      const n = parseInt(idx);
-      return isNaN(n) ? null : (selected[n]?._origIdx ?? null);
-    });
-    // If Claude returned all nulls, distribute images evenly as fallback
-    if (result.every(v => v == null)) return distributeImages(topics.length, selected);
-    // Pad with nulls if too short
-    while (result.length < topics.length) result.push(null);
-    return result;
-  } catch {
+CONCEPTO A EVALUAR: "${topic}"
+
+Para cada imagen, asigná una puntuación de 0 a 10 según qué tan bien representa ESPECÍFICAMENTE el concepto.
+
+CRITERIOS DE PUNTUACIÓN:
+- 9-10: La imagen muestra ESPECÍFICAMENTE ese concepto como foco principal (ej: diagrama del platisma para "Platisma")
+- 7-8: La imagen muestra el concepto claramente aunque no sea el único tema
+- 4-6: El concepto aparece en la imagen pero no es el foco
+- 1-3: El concepto solo está mencionado de texto o aparece marginalmente
+- 0: La imagen no tiene relación con el concepto
+
+PENALIZACIONES (restar puntos):
+- Si es una lista de texto sin ilustración: -3
+- Si es una diapositiva completa con muchos temas: -2
+- Si muestra un concepto diferente aunque sea del mismo campo: -4
+
+Respondé SOLO con JSON con exactamente ${batch.length} valores numéricos:
+{"scores": [8, 2, 9, 0, 5, 3, 7, 1]}`;
+
+      try {
+        const raw = await askClaude(prompt, batch);
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) continue;
+        const parsed = JSON.parse(jsonMatch[0]);
+        const scores = parsed.scores || [];
+        scores.forEach((score, bi) => {
+          const s = typeof score === 'number' ? score : parseFloat(score) || 0;
+          if (s > bestScore) {
+            bestScore = s;
+            bestOrigIdx = batch[bi]?._origIdx ?? null;
+          }
+        });
+      } catch { continue; }
+    }
+
+    // Only assign image if relevance score is meaningful (>= 5)
+    return bestScore >= 5 ? bestOrigIdx : null;
+  }));
+
+  // If everything came back null (API failed), fall back to even distribution
+  if (results.every(v => v == null)) {
     return distributeImages(topics.length, selected);
   }
+
+  return results;
 }
 
 // Spread available images across topics when AI matching fails
