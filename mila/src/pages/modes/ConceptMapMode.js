@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMila } from '../../context/MilaContext';
-import { generateConceptMapAI } from '../../utils/aiService';
+import { generateConceptMapAI, assignImagesToNodes } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
@@ -26,29 +26,37 @@ export default function ConceptMapMode({ summary }) {
     }
     return {};
   });
+
+  // Zoom & pan
+  const [scale, setScale] = useState(0.75);
+  const [pan, setPan] = useState({ x: 20, y: 20 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef(null);
+  const lastTouchDist = useRef(null);
+
+  // Node drag
   const [dragging, setDragging] = useState(null);
   const containerRef = useRef(null);
 
-  function applyMap(data) {
-    setMapData(data);
+  async function applyMap(data) {
+    let nodes = data.nodes;
+    if (images.length > 0) {
+      try { nodes = await assignImagesToNodes(nodes, images); } catch { /* keep without images */ }
+    }
+    const finalData = { ...data, nodes };
+    setMapData(finalData);
     const p = {};
-    data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+    finalData.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
     setPositions(p);
-    updateSummary(summary.id, { conceptMap: data });
+    updateSummary(summary.id, { conceptMap: finalData });
   }
 
   useEffect(() => {
     if (cached) return;
     setLoading(true);
     generateConceptMapAI(text)
-      .then(data => {
-        if (!data || !data.nodes?.length) throw new Error('empty');
-        applyMap(data);
-      })
-      .catch(() => {
-        const fb = generateConceptMap(text);
-        if (fb?.nodes?.length) applyMap(fb);
-      })
+      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); return applyMap(data); })
+      .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -56,47 +64,114 @@ export default function ConceptMapMode({ summary }) {
     setLoading(true);
     setMapData(null);
     setExpanded(new Set([0]));
+    setScale(0.75);
+    setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
     generateConceptMapAI(text)
-      .then(data => {
-        if (!data || !data.nodes?.length) throw new Error('empty');
-        applyMap(data);
-      })
-      .catch(() => {
-        const fb = generateConceptMap(text);
-        if (fb?.nodes?.length) applyMap(fb);
-      })
+      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); return applyMap(data); })
+      .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
   }
 
-  const onMouseMove = useCallback(e => {
-    if (!dragging) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const scrollLeft = containerRef.current.scrollLeft;
-    const scrollTop = containerRef.current.scrollTop;
-    setPositions(prev => ({
-      ...prev,
-      [dragging.id]: {
-        x: e.clientX - rect.left + scrollLeft - dragging.ox,
-        y: e.clientY - rect.top + scrollTop - dragging.oy,
+  // --- Zoom helpers ---
+  function zoom(factor, cx, cy) {
+    setScale(prev => {
+      const next = Math.min(2.5, Math.max(0.2, prev * factor));
+      if (cx != null && cy != null) {
+        setPan(p => ({
+          x: cx - (cx - p.x) * (next / prev),
+          y: cy - (cy - p.y) * (next / prev),
+        }));
       }
-    }));
-  }, [dragging]);
+      return next;
+    });
+  }
 
-  const onMouseUp = useCallback(() => setDragging(null), []);
-
-  function startDrag(e, node) {
+  // --- Wheel: zoom centered on cursor ---
+  const onWheel = useCallback(e => {
     e.preventDefault();
     const rect = containerRef.current?.getBoundingClientRect();
+    const cx = e.clientX - (rect?.left || 0);
+    const cy = e.clientY - (rect?.top || 0);
+    zoom(e.deltaY < 0 ? 1.12 : 0.88, cx, cy);
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [onWheel]);
+
+  // --- Touch: pinch to zoom + two-finger pan ---
+  function onTouchStart(e) {
+    if (e.touches.length === 2) {
+      lastTouchDist.current = getTouchDist(e.touches);
+    }
+  }
+  function onTouchMove(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = getTouchDist(e.touches);
+      if (lastTouchDist.current) {
+        const factor = dist / lastTouchDist.current;
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = containerRef.current?.getBoundingClientRect();
+        zoom(factor, cx - (rect?.left || 0), cy - (rect?.top || 0));
+      }
+      lastTouchDist.current = dist;
+    }
+  }
+  function onTouchEnd() { lastTouchDist.current = null; }
+  function getTouchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // --- Pan with mouse drag on empty canvas ---
+  const onCanvasPanStart = useCallback(e => {
+    if (dragging) return;
+    setIsPanning(true);
+    panStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
+  }, [dragging, pan]);
+
+  const onMouseMove = useCallback(e => {
+    if (dragging) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPositions(prev => ({
+        ...prev,
+        [dragging.id]: {
+          x: (e.clientX - rect.left - pan.x) / scale - dragging.ox,
+          y: (e.clientY - rect.top - pan.y) / scale - dragging.oy,
+        }
+      }));
+    } else if (isPanning && panStart.current) {
+      setPan({
+        x: panStart.current.px + (e.clientX - panStart.current.mx),
+        y: panStart.current.py + (e.clientY - panStart.current.my),
+      });
+    }
+  }, [dragging, isPanning, pan, scale]);
+
+  const onMouseUp = useCallback(() => {
+    setDragging(null);
+    setIsPanning(false);
+    panStart.current = null;
+  }, []);
+
+  function startNodeDrag(e, node) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const scrollLeft = containerRef.current.scrollLeft;
-    const scrollTop = containerRef.current.scrollTop;
     const pos = positions[node.id] || { x: node.x, y: node.y };
     setDragging({
       id: node.id,
-      ox: e.clientX - rect.left + scrollLeft - pos.x,
-      oy: e.clientY - rect.top + scrollTop - pos.y,
+      ox: (e.clientX - rect.left - pan.x) / scale - pos.x,
+      oy: (e.clientY - rect.top - pan.y) / scale - pos.y,
     });
   }
 
@@ -108,7 +183,7 @@ export default function ConceptMapMode({ summary }) {
     });
   }
 
-  if (loading) return <MilaLoadingScreen message="MILA está construyendo el mapa conceptual…" sub="Analizando contenido e imágenes…" />;
+  if (loading) return <MilaLoadingScreen message="MILA está construyendo el mapa conceptual…" sub="Analizando el contenido…" />;
 
   if (!mapData || !mapData.nodes?.length) return (
     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
@@ -125,34 +200,53 @@ export default function ConceptMapMode({ summary }) {
 
   return (
     <div>
+      {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p style={{ fontSize: 12, color: 'var(--text-light)' }}>
-          Arrastrá para mover · Clic para expandir/colapsar nodos
+          Pellizca o usa la rueda para hacer zoom · Arrastrá para mover y panear
         </p>
-        <button onClick={regenerate} style={{ fontSize: 11, color: 'var(--text-light)', padding: '3px 10px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent' }}>
-          ↺ Regenerar
-        </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button onClick={() => zoom(1.2)} style={zoomBtnStyle}>+</button>
+          <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 36, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+          <button onClick={() => zoom(1 / 1.2)} style={zoomBtnStyle}>−</button>
+          <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={{ ...zoomBtnStyle, padding: '4px 10px' }}>↺</button>
+          <button onClick={regenerate} style={{ fontSize: 11, color: 'var(--text-light)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--soft-grey)', background: 'transparent', marginLeft: 4 }}>↺ Regenerar</button>
+        </div>
       </div>
 
+      {/* Canvas */}
       <div
         ref={containerRef}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onMouseDown={onCanvasPanStart}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         style={{
           width: '100%', height: 620,
-          overflow: 'auto',
+          overflow: 'hidden',
           borderRadius: 'var(--radius-md)',
           border: '1.5px solid var(--whisper-grey)',
           position: 'relative',
-          cursor: dragging ? 'grabbing' : 'default',
+          cursor: dragging ? 'grabbing' : isPanning ? 'grabbing' : 'grab',
           background: 'var(--pale-mist)',
+          userSelect: 'none',
         }}
       >
-        {/* Dot grid */}
+        {/* Dot grid (fixed, behind transform) */}
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--whisper-grey) 1.2px, transparent 1.2px)', backgroundSize: '28px 28px', pointerEvents: 'none', zIndex: 0 }} />
 
-        <div style={{ width: CANVAS_W, height: CANVAS_H, position: 'relative' }}>
+        {/* Transformed canvas */}
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0,
+          width: CANVAS_W, height: CANVAS_H,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          transformOrigin: '0 0',
+          zIndex: 1,
+        }}>
 
           {/* SVG edges */}
           <svg style={{ position: 'absolute', inset: 0, width: CANVAS_W, height: CANVAS_H, pointerEvents: 'none', zIndex: 1 }}>
@@ -174,15 +268,10 @@ export default function ConceptMapMode({ summary }) {
               const cy = (fy + ty) / 2;
               return (
                 <g key={i}>
-                  <path
-                    d={`M ${fx} ${fy} C ${fx} ${cy} ${tx} ${cy} ${tx} ${ty}`}
-                    fill="none" stroke="var(--driftwood)" strokeWidth="1.5" opacity="0.5"
-                    markerEnd="url(#arrowhead)"
-                  />
+                  <path d={`M ${fx} ${fy} C ${fx} ${cy} ${tx} ${cy} ${tx} ${ty}`}
+                    fill="none" stroke="var(--driftwood)" strokeWidth="1.5" opacity="0.5" markerEnd="url(#arrowhead)" />
                   {edge.label && (
-                    <text x={(fx + tx) / 2} y={cy - 5} textAnchor="middle" fontSize="10" fill="var(--text-light)" fontFamily="Inter, sans-serif">
-                      {edge.label}
-                    </text>
+                    <text x={(fx + tx) / 2} y={cy - 5} textAnchor="middle" fontSize="10" fill="var(--text-light)" fontFamily="Inter, sans-serif">{edge.label}</text>
                   )}
                 </g>
               );
@@ -202,8 +291,7 @@ export default function ConceptMapMode({ summary }) {
                 key={node.id}
                 style={{
                   position: 'absolute',
-                  left: pos.x,
-                  top: pos.y,
+                  left: pos.x, top: pos.y,
                   width: NODE_W,
                   zIndex: isExpanded ? 20 : isMain ? 5 : 2,
                   borderRadius: 12,
@@ -212,56 +300,28 @@ export default function ConceptMapMode({ summary }) {
                     ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)'
                     : 'var(--ghost-white)',
                   border: isMain ? 'none' : `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
-                  transition: 'box-shadow 0.2s, border-color 0.2s',
-                  userSelect: 'none',
                   overflow: 'hidden',
                 }}
               >
-                {/* Header: drag handle + expand toggle */}
+                {/* Header */}
                 <div
-                  onMouseDown={e => startDrag(e, node)}
+                  onMouseDown={e => startNodeDrag(e, node)}
                   onClick={() => toggleExpand(node.id)}
-                  style={{
-                    padding: '10px 12px',
-                    cursor: 'grab',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 8,
-                  }}
+                  style={{ padding: '10px 12px', cursor: 'grab', display: 'flex', alignItems: 'flex-start', gap: 8 }}
                 >
-                  {/* Type badge */}
-                  <div style={{
-                    flexShrink: 0, marginTop: 2,
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: isMain ? 'rgba(255,255,255,0.7)' : isSub ? 'var(--driftwood)' : 'var(--whisper-grey)',
-                    marginRight: 2,
-                  }} />
-
+                  <div style={{ flexShrink: 0, marginTop: 2, width: 8, height: 8, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.7)' : isSub ? 'var(--driftwood)' : 'var(--whisper-grey)', marginRight: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: isMain ? 'white' : 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>
-                      {node.label}
-                    </div>
-                    <div style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.72)' : 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>
-                      {node.summary}
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: isMain ? 'white' : 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
+                    <div style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.72)' : 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
                   </div>
-
-                  <span style={{ flexShrink: 0, fontSize: 10, color: isMain ? 'rgba(255,255,255,0.5)' : 'var(--text-light)', paddingTop: 2 }}>
-                    {isExpanded ? '▲' : '▼'}
-                  </span>
+                  <span style={{ flexShrink: 0, fontSize: 10, color: isMain ? 'rgba(255,255,255,0.5)' : 'var(--text-light)', paddingTop: 2 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
 
                 {/* Expanded body */}
                 {isExpanded && (
                   <div style={{ borderTop: `1px solid ${isMain ? 'rgba(255,255,255,0.2)' : 'var(--soft-grey)'}`, padding: '12px 12px 14px' }}>
-
-                    {node.content && (
-                      <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>
-                        {node.content}
-                      </p>
-                    )}
-
-                    {node.bullets && node.bullets.length > 0 && (
+                    {node.content && <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
+                    {node.bullets?.length > 0 && (
                       <ul style={{ margin: '0 0 10px', paddingLeft: 0, listStyle: 'none' }}>
                         {node.bullets.map((b, bi) => (
                           <li key={bi} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
@@ -271,13 +331,8 @@ export default function ConceptMapMode({ summary }) {
                         ))}
                       </ul>
                     )}
-
                     {img && (
-                      <img
-                        src={img.src}
-                        alt=""
-                        style={{ width: '100%', borderRadius: 8, objectFit: 'contain', maxHeight: 180, background: 'rgba(0,0,0,0.05)', marginTop: 4 }}
-                      />
+                      <img src={img.src} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'contain', maxHeight: 180, background: 'rgba(0,0,0,0.05)', marginTop: 4 }} />
                     )}
                   </div>
                 )}
@@ -285,10 +340,17 @@ export default function ConceptMapMode({ summary }) {
             );
           })}
         </div>
+
+        {/* Zoom controls overlay */}
+        <div style={{ position: 'absolute', bottom: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 100 }}>
+          <button onClick={() => zoom(1.25)} style={overlayBtnStyle}>+</button>
+          <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={{ ...overlayBtnStyle, fontSize: 14 }}>⊙</button>
+          <button onClick={() => zoom(0.8)} style={overlayBtnStyle}>−</button>
+        </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {[
           { color: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', label: 'Concepto principal' },
           { color: 'var(--driftwood)', label: 'Subtema', border: true },
@@ -309,3 +371,17 @@ export default function ConceptMapMode({ summary }) {
     </div>
   );
 }
+
+const zoomBtnStyle = {
+  width: 28, height: 28, borderRadius: 6, border: '1px solid var(--soft-grey)',
+  background: 'var(--ghost-white)', color: 'var(--text-dark)', fontSize: 16,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+};
+
+const overlayBtnStyle = {
+  width: 32, height: 32, borderRadius: 8,
+  background: 'var(--ghost-white)', border: '1px solid var(--whisper-grey)',
+  color: 'var(--text-dark)', fontSize: 18, fontWeight: 300,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+};

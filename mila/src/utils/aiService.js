@@ -188,6 +188,14 @@ Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 
   return { questions, allCovered: false };
 }
 
+// Assigns images to concept map nodes via vision
+export async function assignImagesToNodes(nodes, images) {
+  if (!images || images.length === 0) return nodes;
+  const topics = nodes.map(n => n.label + (n.summary ? ': ' + n.summary : ''));
+  const imageMatches = await matchImages(topics, images);
+  return nodes.map((n, i) => ({ ...n, imageIndex: imageMatches[i] ?? null }));
+}
+
 export async function generateConceptMapAI(text) {
   const prompt = `Eres un profesor de medicina. Analiza el siguiente resumen y crea un mapa conceptual detallado y organizado sobre los temas REALES del texto.
 
