@@ -138,43 +138,7 @@ export default function Home() {
 
   return (
     <div>
-      <HeroSection compact={summaries.length > 0} />
-
-      {summaries.length > 0 && (
-        <div style={{ marginBottom: 40 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>
-            Tus resúmenes
-          </h2>
-          <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>
-            Selecciona uno para empezar a estudiar
-          </p>
-          {Object.entries(grouped).map(([subjectKey, subjectSummaries]) => (
-            <div key={subjectKey} style={{ marginBottom: 28 }}>
-              <button
-                onClick={() => toggleSubject(subjectKey)}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-              >
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-mid)', letterSpacing: '0.3px', textTransform: 'uppercase' }}>{subjectKey}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--soft-grey)', borderRadius: 20, padding: '2px 8px' }}>{subjectSummaries.length}</span>
-                <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>{collapsedSubjects[subjectKey] ? '▶' : '▼'}</span>
-              </button>
-              {!collapsedSubjects[subjectKey] && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                  {subjectSummaries.map(s => (
-                    <SummaryCard
-                      key={s.id}
-                      summary={s}
-                      onOpen={() => setActiveSummary(s)}
-                      onOpenMode={(modeId) => openMode(s, modeId)}
-                      onDelete={() => deleteSummary(s.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <HeroSection />
 
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -282,29 +246,34 @@ export default function Home() {
         )}
       </div>
 
+      {summaries.length > 0 && (
+        <div style={{ marginTop: 48 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>Tus resúmenes</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>Selecciona uno para empezar a estudiar</p>
+          {Object.entries(grouped).map(([subjectKey, subjectSummaries]) => (
+            <div key={subjectKey} style={{ marginBottom: 28 }}>
+              <button onClick={() => toggleSubject(subjectKey)} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-mid)', letterSpacing: '0.3px', textTransform: 'uppercase' }}>{subjectKey}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--soft-grey)', borderRadius: 20, padding: '2px 8px' }}>{subjectSummaries.length}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>{collapsedSubjects[subjectKey] ? '▶' : '▼'}</span>
+              </button>
+              {!collapsedSubjects[subjectKey] && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                  {subjectSummaries.map(s => (
+                    <SummaryCard key={s.id} summary={s} onOpen={() => setActiveSummary(s)} onOpenMode={(modeId) => openMode(s, modeId)} onDelete={() => deleteSummary(s.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function HeroSection({ compact }) {
+function HeroSection() {
   const { darkMode } = useMila();
-  if (compact) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 0 28px', animation: 'fadeUp 0.4s ease both' }}>
-        <div style={{ opacity: 0.85, flexShrink: 0 }}>
-          <MilaLogo size={36} dark={darkMode} />
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-0.5px', margin: 0 }}>
-            Hola, soy <span style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>MILA</span>
-          </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-light)', margin: '2px 0 0' }}>
-            Tu asistente de estudio · Sube otro resumen abajo
-          </p>
-        </div>
-      </div>
-    );
-  }
   return (
     <div style={{ textAlign: 'center', padding: '48px 0 56px', animation: 'fadeUp 0.6s ease both' }}>
       <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9 }}>
