@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMila } from '../../context/MilaContext';
 import { generateFlashcards } from '../../utils/parseContent';
 import { generateFlashcardsAI } from '../../utils/aiService';
+import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 
 export default function FlashcardsMode({ summary }) {
   const { updateSummary } = useMila();
@@ -52,7 +53,7 @@ export default function FlashcardsMode({ summary }) {
       .finally(() => setGenerating(false));
   }
 
-  if (loading) return <LoadingAI message="MILA está generando tus flashcards…" />;
+  if (loading) return <MilaLoadingScreen message="MILA está generando tus flashcards…" sub="Esto puede tomar unos segundos" />;
   if (!text || cards.length === 0) return <EmptyState message="No hay suficiente texto para generar flashcards." />;
 
   if (index >= cards.length) {
@@ -207,15 +208,3 @@ function EmptyState({ message }) {
   );
 }
 
-function LoadingAI({ message }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '64px 0' }}>
-      <div style={{ width: 48, height: 48, borderRadius: 16, margin: '0 auto 20px', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s ease-in-out infinite' }}>
-        <span style={{ color: 'white', fontSize: 22, fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>M</span>
-      </div>
-      <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 6 }}>{message}</p>
-      <p style={{ fontSize: 12, color: 'var(--text-light)' }}>Esto puede tomar unos segundos</p>
-      <style>{`@keyframes pulse{0%,100%{opacity:0.7;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}`}</style>
-    </div>
-  );
-}

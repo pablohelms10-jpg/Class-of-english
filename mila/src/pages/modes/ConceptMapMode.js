@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateConceptMap } from '../../utils/parseContent';
 import { generateConceptMapAI } from '../../utils/aiService';
+import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 
 export default function ConceptMapMode({ text }) {
   const [mapData, setMapData] = useState(null);
@@ -62,16 +63,7 @@ export default function ConceptMapMode({ text }) {
     setEditingId(null);
   }
 
-  if (loading) return (
-    <div style={{ textAlign: 'center', padding: '64px 0' }}>
-      <div style={{ width: 48, height: 48, borderRadius: 16, margin: '0 auto 20px', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s ease-in-out infinite' }}>
-        <span style={{ color: 'white', fontSize: 22, fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>M</span>
-      </div>
-      <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 6 }}>MILA está construyendo el mapa conceptual…</p>
-      <p style={{ fontSize: 12, color: 'var(--text-light)' }}>Esto puede tomar unos segundos</p>
-      <style>{`@keyframes pulse{0%,100%{opacity:0.7;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}`}</style>
-    </div>
-  );
+  if (loading) return <MilaLoadingScreen message="MILA está construyendo el mapa conceptual…" sub="Esto puede tomar unos segundos" />;
 
   if (!text || nodes.length === 0) {
     return (

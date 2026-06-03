@@ -3,6 +3,13 @@ import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
 
+const TAG_OPTIONS = [
+  { id: 'era1', label: 'ERA 1', color: '#8B7355' },
+  { id: 'era2', label: 'ERA 2', color: '#6B7A5E' },
+  { id: 'era3', label: 'ERA 3', color: '#5E6B7A' },
+  { id: 'efi',  label: 'EFI',   color: '#7A5E6B' },
+];
+
 const MODES = [
   { id: 'flashcards', emoji: '🃏', label: 'Flashcards', desc: 'Tarjetas de memorización interactivas' },
   { id: 'quiz', emoji: '⚡', label: 'Preguntas rápidas', desc: 'Test de opción múltiple' },
@@ -459,13 +466,19 @@ function SummaryCard({ summary, onOpen, onDelete }) {
         </div>
       )}
       <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5 }}>
-        {summary.text ? `${summary.text.slice(0, 80)}...` : `${summary.images.length} imagen(es)`}
+        {summary.text ? `${summary.text.slice(0, 80)}...` : `${(summary.images || []).length} imagen(es)`}
       </div>
-      {summary.images && summary.images.length > 0 && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
-          {summary.images.slice(0, 3).map((img, i) => (
-            <img key={i} src={img.src} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8 }} />
-          ))}
+      {summary.tags && summary.tags.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {summary.tags.map(tagId => {
+            const tag = TAG_OPTIONS.find(t => t.id === tagId);
+            if (!tag) return null;
+            return (
+              <span key={tagId} style={{ padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: tag.color, color: '#fff', letterSpacing: '0.2px' }}>
+                {tag.label}
+              </span>
+            );
+          })}
         </div>
       )}
       {/* Edit button */}

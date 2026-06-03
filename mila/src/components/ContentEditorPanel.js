@@ -122,7 +122,7 @@ function FlashcardEditor({ card, onUpdate, onDelete }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div style={{ marginBottom: 8, borderRadius: 12, border: '1px solid var(--soft-grey)', background: 'white', overflow: 'hidden' }}>
+    <div style={{ marginBottom: 8, borderRadius: 12, border: '1px solid var(--soft-grey)', background: 'var(--pale-mist)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', gap: 10, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
         <span style={{ fontSize: 11, color: 'var(--text-light)', width: 10 }}>{expanded ? '▼' : '▶'}</span>
         <span style={{ flex: 1, fontSize: 13, color: 'var(--text-dark)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -154,7 +154,7 @@ function QuestionEditor({ question, onUpdate, onDelete }) {
   }
 
   return (
-    <div style={{ marginBottom: 8, borderRadius: 12, border: '1px solid var(--soft-grey)', background: 'white', overflow: 'hidden' }}>
+    <div style={{ marginBottom: 8, borderRadius: 12, border: '1px solid var(--soft-grey)', background: 'var(--pale-mist)', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', gap: 10, cursor: 'pointer' }} onClick={() => setExpanded(e => !e)}>
         <span style={{ fontSize: 11, color: 'var(--text-light)', width: 10 }}>{expanded ? '▼' : '▶'}</span>
         <span style={{ flex: 1, fontSize: 13, color: 'var(--text-dark)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
