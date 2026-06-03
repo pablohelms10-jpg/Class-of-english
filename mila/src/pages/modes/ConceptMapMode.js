@@ -411,21 +411,25 @@ export default function ConceptMapMode({ summary }) {
 
                 {/* Expanded body */}
                 {isExpanded && (
-                  <div style={{ borderTop: `1px solid ${isMain ? 'rgba(255,255,255,0.2)' : 'var(--soft-grey)'}`, padding: '12px 12px 14px' }}>
-                    {node.content && <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
-                    {node.bullets?.length > 0 && (
-                      <ul style={{ margin: '0 0 10px', paddingLeft: 0, listStyle: 'none' }}>
-                        {node.bullets.map((b, bi) => (
-                          <li key={bi} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
-                            <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.6)' : 'var(--driftwood)', marginTop: 5 }} />
-                            <span style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.82)' : 'var(--text-dark)', lineHeight: 1.5 }}>{b}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                  <div style={{ borderTop: `1px solid ${isMain ? 'rgba(255,255,255,0.2)' : 'var(--soft-grey)'}` }}>
                     {img && (
-                      <img src={img.src} alt="" style={{ width: '100%', borderRadius: 8, objectFit: 'cover', maxHeight: 260, background: 'rgba(0,0,0,0.05)', marginTop: 6, display: 'block' }} />
+                      <div style={{ width: '100%', height: 200, overflow: 'hidden', flexShrink: 0 }}>
+                        <img src={img.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                      </div>
                     )}
+                    <div style={{ padding: '12px 12px 14px' }}>
+                      {node.content && <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
+                      {node.bullets?.length > 0 && (
+                        <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
+                          {node.bullets.map((b, bi) => (
+                            <li key={bi} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
+                              <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.6)' : 'var(--driftwood)', marginTop: 5 }} />
+                              <span style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.82)' : 'var(--text-dark)', lineHeight: 1.5 }}>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

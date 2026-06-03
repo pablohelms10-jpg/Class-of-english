@@ -222,15 +222,13 @@ export default function FlashcardsMode({ summary }) {
           <p style={{ fontSize: 18, color: 'var(--text-dark)', textAlign: 'center', lineHeight: 1.7 }}>{card.front}</p>
         ) : (
           <div style={{ textAlign: 'center', width: '100%' }}>
-            <p style={{ fontSize: 24, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 10 }}>{card.back}</p>
-            {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, marginBottom: card.imageIndex != null ? 16 : 0 }}>{card.context}</p>}
             {card.imageIndex != null && images[card.imageIndex] && (
-              <img
-                src={images[card.imageIndex].src}
-                alt=""
-                style={{ width: '100%', maxHeight: 320, borderRadius: 10, objectFit: 'cover', background: 'rgba(255,255,255,0.15)', marginTop: 12, display: 'block' }}
-              />
+              <div style={{ width: 'calc(100% + 80px)', marginLeft: -40, marginTop: -40, marginBottom: 16, height: 220, overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
+                <img src={images[card.imageIndex].src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+              </div>
             )}
+            <p style={{ fontSize: 24, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 10 }}>{card.back}</p>
+            {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>{card.context}</p>}
           </div>
         )}
       </div>

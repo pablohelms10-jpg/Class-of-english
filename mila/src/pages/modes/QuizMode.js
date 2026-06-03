@@ -221,11 +221,15 @@ export default function QuizMode({ summary }) {
         <div style={{ height: '100%', width: `${(index / questions.length) * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />
       </div>
 
-      <div style={{ padding: '28px 32px', borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)' }}>
-        <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7, marginBottom: q.imageIndex != null && images[q.imageIndex] ? 16 : 0 }}>{q.question}</p>
+      <div style={{ borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)', overflow: 'hidden' }}>
         {q.imageIndex != null && images[q.imageIndex] && (
-          <img src={images[q.imageIndex].src} alt="" style={{ width: '100%', maxHeight: 320, borderRadius: 10, objectFit: 'cover', display: 'block', marginTop: 12 }} />
+          <div style={{ width: '100%', height: 240, overflow: 'hidden' }}>
+            <img src={images[q.imageIndex].src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+          </div>
         )}
+        <div style={{ padding: '20px 28px' }}>
+          <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7, margin: 0 }}>{q.question}</p>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
