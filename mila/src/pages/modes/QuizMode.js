@@ -3,6 +3,7 @@ import { useMila } from '../../context/MilaContext';
 import { generateQuestions } from '../../utils/parseContent';
 import { generateQuestionsAI } from '../../utils/aiService';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
+import { TrophyIcon, BookIcon, QuizIcon } from '../../components/Icons';
 
 export default function QuizMode({ summary }) {
   const { updateSummary } = useMila();
@@ -61,7 +62,7 @@ export default function QuizMode({ summary }) {
 
   if (!text || questions.length === 0) return (
     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14, opacity: 0.5 }}><QuizIcon size={40} color="var(--text-light)" /></div>
       <p style={{ fontSize: 14 }}>No hay suficiente contenido para generar preguntas.</p>
     </div>
   );
@@ -70,7 +71,9 @@ export default function QuizMode({ summary }) {
     const pct = Math.round((score / answers.length) * 100);
     return (
       <div style={{ textAlign: 'center', padding: '48px 0' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>{pct >= 70 ? '🏆' : '📖'}</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          {pct >= 70 ? <TrophyIcon size={52} color="var(--driftwood)" /> : <BookIcon size={52} color="var(--text-light)" />}
+        </div>
         <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>{score} / {answers.length} correctas</h3>
         <p style={{ fontSize: 15, color: 'var(--text-mid)', marginBottom: 16 }}>{pct}% de acierto</p>
 

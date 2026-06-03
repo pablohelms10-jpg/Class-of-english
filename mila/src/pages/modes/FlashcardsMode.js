@@ -3,6 +3,7 @@ import { useMila } from '../../context/MilaContext';
 import { generateFlashcards } from '../../utils/parseContent';
 import { generateFlashcardsAI } from '../../utils/aiService';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
+import { StarIcon, BookIcon, DocumentIcon, FlashcardIcon } from '../../components/Icons';
 
 export default function FlashcardsMode({ summary }) {
   const { updateSummary } = useMila();
@@ -85,7 +86,9 @@ export default function FlashcardsMode({ summary }) {
     const pct = Math.round((known.size / cards.length) * 100);
     return (
       <div style={{ textAlign: 'center', padding: '48px 0' }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>{pct >= 70 ? '🎉' : '📚'}</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          {pct >= 70 ? <StarIcon size={52} color="var(--driftwood)" /> : <BookIcon size={52} color="var(--text-light)" />}
+        </div>
         <h3 style={{ fontSize: 28, fontWeight: 300, marginBottom: 8 }}>
           {pct >= 70 ? '¡Buen trabajo!' : 'Sigue practicando'}
         </h3>
@@ -243,7 +246,7 @@ function AllCoveredBanner({ type, count }) {
 function EmptyState({ message }) {
   return (
     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14, opacity: 0.5 }}><FlashcardIcon size={40} color="var(--text-light)" /></div>
       <p style={{ fontSize: 14, lineHeight: 1.7, maxWidth: 320, margin: '0 auto' }}>{message}</p>
     </div>
   );

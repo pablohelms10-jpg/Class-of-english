@@ -5,12 +5,13 @@ import QuizMode from './modes/QuizMode';
 import ConceptMapMode from './modes/ConceptMapMode';
 import ImagesMode from './modes/ImagesMode';
 import ContentEditorPanel from '../components/ContentEditorPanel';
+import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon } from '../components/Icons';
 
 const MODES = [
-  { id: 'flashcards', emoji: '🃏', label: 'Flashcards' },
-  { id: 'quiz', emoji: '⚡', label: 'Preguntas' },
-  { id: 'map', emoji: '🗺', label: 'Mapa' },
-  { id: 'images', emoji: '🖼', label: 'Imágenes' },
+  { id: 'flashcards', Icon: FlashcardIcon, label: 'Flashcards' },
+  { id: 'quiz', Icon: QuizIcon, label: 'Preguntas' },
+  { id: 'map', Icon: MapIcon, label: 'Mapa' },
+  { id: 'images', Icon: GalleryIcon, label: 'Imágenes' },
 ];
 
 export default function SummaryDetail() {
@@ -66,25 +67,26 @@ export default function SummaryDetail() {
         {MODES.map(m => {
           const disabled = m.id === 'images' && (activeSummary.images || []).length === 0;
           const active = activeMode === m.id;
+          const iconColor = active ? 'white' : disabled ? 'var(--text-light)' : 'var(--text-dark)';
           return (
             <button
               key={m.id}
               onClick={() => !disabled && setActiveMode(m.id)}
               disabled={disabled}
               style={{
-                padding: '12px 22px', borderRadius: 'var(--radius-lg)',
+                padding: '11px 20px', borderRadius: 'var(--radius-lg)',
                 background: active
                   ? 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))'
                   : 'var(--pale-mist)',
                 border: `1.5px solid ${active ? 'transparent' : 'var(--whisper-grey)'}`,
-                color: active ? 'white' : disabled ? 'var(--text-light)' : 'var(--text-dark)',
+                color: iconColor,
                 fontSize: 14, fontWeight: active ? 500 : 400,
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'var(--transition)', opacity: disabled ? 0.4 : 1,
-                display: 'flex', alignItems: 'center', gap: 8,
+                display: 'flex', alignItems: 'center', gap: 7,
               }}
             >
-              <span>{m.emoji}</span>
+              <m.Icon size={16} color={iconColor} />
               <span>{m.label}</span>
             </button>
           );
@@ -104,10 +106,10 @@ export default function SummaryDetail() {
 
 function ModeSelector({ setActiveMode, hasImages }) {
   const modes = [
-    { id: 'flashcards', emoji: '🃏', label: 'Flashcards', desc: 'Tarjetas para memorizar definiciones y conceptos clave' },
-    { id: 'quiz', emoji: '⚡', label: 'Preguntas rápidas', desc: 'Test de opción múltiple basado en tu resumen' },
-    { id: 'map', emoji: '🗺', label: 'Mapa conceptual', desc: 'Visualización interactiva de las ideas principales' },
-    ...(hasImages ? [{ id: 'images', emoji: '🖼', label: 'Galería', desc: 'Explora las imágenes extraídas del resumen' }] : []),
+    { id: 'flashcards', Icon: FlashcardIcon, label: 'Flashcards', desc: 'Tarjetas para memorizar definiciones y conceptos clave' },
+    { id: 'quiz', Icon: QuizIcon, label: 'Preguntas rápidas', desc: 'Test de opción múltiple basado en tu resumen' },
+    { id: 'map', Icon: MapIcon, label: 'Mapa conceptual', desc: 'Visualización interactiva de las ideas principales' },
+    ...(hasImages ? [{ id: 'images', Icon: GalleryIcon, label: 'Galería', desc: 'Explora las imágenes extraídas del resumen' }] : []),
   ];
   return (
     <div>
@@ -136,7 +138,7 @@ function ModeCard({ mode, onClick }) {
         textAlign: 'left',
       }}
     >
-      <div style={{ fontSize: 32, marginBottom: 12 }}>{mode.emoji}</div>
+      <div style={{ marginBottom: 14 }}><mode.Icon size={28} color="var(--text-mid)" /></div>
       <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6 }}>{mode.label}</div>
       <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5 }}>{mode.desc}</div>
     </button>

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
+import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon, UploadIcon, DocumentIcon } from '../components/Icons';
 
 const TAG_OPTIONS = [
   { id: 'era1', label: 'ERA 1', color: '#8B7355' },
@@ -11,10 +12,10 @@ const TAG_OPTIONS = [
 ];
 
 const MODES = [
-  { id: 'flashcards', emoji: '🃏', label: 'Flashcards', desc: 'Tarjetas de memorización interactivas' },
-  { id: 'quiz', emoji: '⚡', label: 'Preguntas rápidas', desc: 'Test de opción múltiple' },
-  { id: 'map', emoji: '🗺', label: 'Mapa conceptual', desc: 'Visualiza las ideas clave' },
-  { id: 'images', emoji: '🖼', label: 'Galería de imágenes', desc: 'Imágenes extraídas del resumen' },
+  { id: 'flashcards', Icon: FlashcardIcon, label: 'Flashcards', desc: 'Tarjetas de memorización interactivas' },
+  { id: 'quiz', Icon: QuizIcon, label: 'Preguntas rápidas', desc: 'Test de opción múltiple' },
+  { id: 'map', Icon: MapIcon, label: 'Mapa conceptual', desc: 'Visualiza las ideas clave' },
+  { id: 'images', Icon: GalleryIcon, label: 'Galería de imágenes', desc: 'Imágenes extraídas del resumen' },
 ];
 
 const inputStyle = {
@@ -225,7 +226,7 @@ export default function Home() {
             <LoadingDots message={loadingMsg} progress={pdfProgress} />
           ) : (
             <>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14, opacity: 0.5 }}><DocumentIcon size={40} color="var(--text-mid)" /></div>
               <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-mid)', marginBottom: 6 }}>
                 Arrastra tu resumen aquí
               </p>
@@ -303,7 +304,7 @@ export default function Home() {
                 background: 'var(--pale-mist)',
                 border: '1px solid var(--whisper-grey)',
               }}>
-                <div style={{ fontSize: 24, marginBottom: 8 }}>{m.emoji}</div>
+                <div style={{ marginBottom: 10 }}><m.Icon size={22} color="var(--text-mid)" /></div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>{m.label}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-light)' }}>{m.desc}</div>
               </div>

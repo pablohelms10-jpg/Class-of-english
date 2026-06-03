@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMila } from '../../context/MilaContext';
 import { generateConceptMapAI } from '../../utils/aiService';
+import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
+import { MapIcon } from '../../components/Icons';
 
 const NODE_W = 240;
 const CANVAS_W = 1400;
@@ -30,8 +32,12 @@ export default function ConceptMapMode({ summary }) {
   useEffect(() => {
     if (cached) return;
     setLoading(true);
+    // Try with images first, fall back to text-only if that fails
     generateConceptMapAI(text, images)
+      .catch(() => generateConceptMapAI(text, []))
+      .catch(() => generateConceptMap(text))
       .then(data => {
+        if (!data || !data.nodes?.length) throw new Error('empty');
         setMapData(data);
         const p = {};
         data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
@@ -40,7 +46,14 @@ export default function ConceptMapMode({ summary }) {
       })
       .catch(err => {
         console.error(err);
-        setMapData(null);
+        // Last resort: basic fallback
+        const fb = generateConceptMap(text);
+        if (fb?.nodes?.length) {
+          setMapData(fb);
+          const p = {};
+          fb.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+          setPositions(p);
+        }
       })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,14 +63,26 @@ export default function ConceptMapMode({ summary }) {
     setMapData(null);
     setExpanded(new Set([0]));
     generateConceptMapAI(text, images)
+      .catch(() => generateConceptMapAI(text, []))
+      .catch(() => generateConceptMap(text))
       .then(data => {
+        if (!data || !data.nodes?.length) throw new Error('empty');
         setMapData(data);
         const p = {};
         data.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
         setPositions(p);
         updateSummary(summary.id, { conceptMap: data });
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error(err);
+        const fb = generateConceptMap(text);
+        if (fb?.nodes?.length) {
+          setMapData(fb);
+          const p = {};
+          fb.nodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+          setPositions(p);
+        }
+      })
       .finally(() => setLoading(false));
   }
 
@@ -104,8 +129,10 @@ export default function ConceptMapMode({ summary }) {
 
   if (!mapData || !mapData.nodes?.length) return (
     <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-light)' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>🗺</div>
-      <p style={{ marginBottom: 16 }}>No hay suficiente contenido para generar un mapa.</p>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, opacity: 0.5 }}>
+        <MapIcon size={48} color="var(--text-light)" />
+      </div>
+      <p style={{ marginBottom: 16, fontSize: 14 }}>No hay suficiente contenido para generar un mapa.</p>
       <button onClick={regenerate} style={{ padding: '10px 24px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 14 }}>Intentar de nuevo</button>
     </div>
   );
