@@ -29,8 +29,8 @@ export default function Layout({ children }) {
           onClick={() => { setActiveSummary(null); setActiveMode(null); }}
           style={{ display: 'flex', alignItems: 'center', gap: 10 }}
         >
-          <MilaLogo size={28} dark={darkMode} />
-          <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-dark)', letterSpacing: '-0.3px' }}>MILA</span>
+          <MilaLogo size={36} dark={darkMode} />
+          <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-dark)', letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>MILA</span>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -51,7 +51,7 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: '32px 24px', maxWidth: 900, width: '100%', margin: '0 auto' }}>
+      <main style={{ flex: 1, padding: '32px 24px', maxWidth: 900, width: '100%', margin: '0 auto', animation: 'fadeUp 0.5s ease both' }}>
         {children}
       </main>
 

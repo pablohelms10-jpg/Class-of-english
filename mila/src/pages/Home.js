@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useMila } from '../context/MilaContext';
+import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
 
 const MODES = [
@@ -308,20 +309,11 @@ export default function Home() {
 }
 
 function HeroSection() {
+  const { darkMode } = useMila();
   return (
-    <div style={{ textAlign: 'center', padding: '48px 0 56px' }}>
-      <div style={{
-        display: 'inline-flex',
-        width: 72,
-        height: 72,
-        background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))',
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-        boxShadow: 'var(--shadow-card)',
-      }}>
-        <span style={{ color: 'white', fontSize: 32, fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>M</span>
+    <div style={{ textAlign: 'center', padding: '48px 0 56px', animation: 'fadeUp 0.6s ease both' }}>
+      <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9 }}>
+        <MilaLogo size={64} dark={darkMode} />
       </div>
       <h1 style={{ fontSize: 40, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-1px', marginBottom: 12 }}>
         Hola, soy <span style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>MILA</span>
