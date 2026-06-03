@@ -68,3 +68,18 @@ input, textarea {
 .serif {
   font-family: 'Playfair Display', Georgia, serif;
 }
+
+body.dark {
+  --ghost-white: #1A1A1A;
+  --pale-mist: #222222;
+  --soft-grey: #2E2E2E;
+  --whisper-grey: #3A3A3A;
+  --moonbeam: #1E1E1E;
+  --feather-fog: #1C1C1C;
+  --cloud-veil: #252525;
+  --text-dark: #F0EEE9;
+  --text-mid: #B0A8A4;
+  --text-light: #6B6560;
+  --shadow-soft: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-card: 0 8px 40px rgba(0,0,0,0.4);
+}

@@ -9,8 +9,21 @@ const MODES = [
   { id: 'images', emoji: '🖼', label: 'Galería de imágenes', desc: 'Imágenes extraídas del resumen' },
 ];
 
+const inputStyle = {
+  flex: 1,
+  minWidth: 200,
+  padding: '12px 16px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1.5px solid var(--soft-grey)',
+  background: 'var(--pale-mist)',
+  fontSize: 14,
+  color: 'var(--text-dark)',
+  outline: 'none',
+  transition: 'var(--transition)',
+};
+
 export default function Home() {
-  const { summaries, addSummary, setActiveSummary, setActiveMode, deleteSummary } = useMila();
+  const { summaries, addSummary, setActiveSummary, deleteSummary } = useMila();
   const fileRef = useRef();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,8 +31,10 @@ export default function Home() {
   const [pdfProgress, setPdfProgress] = useState(null);
   const [error, setError] = useState('');
   const [title, setTitle] = useState('');
+  const [subject, setSubject] = useState('');
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [collapsedSubjects, setCollapsedSubjects] = useState({});
 
   async function processFiles(files) {
     setLoading(true);
@@ -55,11 +70,13 @@ export default function Home() {
 
       const summary = addSummary({
         title: title || files[0]?.name?.replace(/\.[^.]+$/, '') || 'Mi resumen',
+        subject: subject || '',
         text,
         images,
         fileName: files[0]?.name,
       });
       setTitle('');
+      setSubject('');
       setActiveSummary(summary);
     } catch (err) {
       console.error(err);
@@ -82,13 +99,27 @@ export default function Home() {
     if (!textInput.trim()) return;
     const summary = addSummary({
       title: title || 'Mi resumen',
+      subject: subject || '',
       text: textInput,
       images: [],
     });
     setTitle('');
+    setSubject('');
     setTextInput('');
     setShowTextInput(false);
     setActiveSummary(summary);
+  }
+
+  // Group summaries by subject
+  const grouped = summaries.reduce((acc, s) => {
+    const key = s.subject || 'Sin materia';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
+
+  function toggleSubject(key) {
+    setCollapsedSubjects(prev => ({ ...prev, [key]: !prev[key] }));
   }
 
   return (
@@ -103,37 +134,65 @@ export default function Home() {
           <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>
             Selecciona uno para empezar a estudiar
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-            {summaries.map(s => (
-              <SummaryCard
-                key={s.id}
-                summary={s}
-                onOpen={() => setActiveSummary(s)}
-                onDelete={() => deleteSummary(s.id)}
-              />
-            ))}
-          </div>
+          {Object.entries(grouped).map(([subjectKey, subjectSummaries]) => (
+            <div key={subjectKey} style={{ marginBottom: 28 }}>
+              <button
+                onClick={() => toggleSubject(subjectKey)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12,
+                  cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-mid)', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                  {subjectKey}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--soft-grey)', borderRadius: 20, padding: '2px 8px' }}>
+                  {subjectSummaries.length}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>
+                  {collapsedSubjects[subjectKey] ? '▶' : '▼'}
+                </span>
+              </button>
+              {!collapsedSubjects[subjectKey] && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                  {subjectSummaries.map(s => (
+                    <SummaryCard
+                      key={s.id}
+                      summary={s}
+                      onOpen={() => setActiveSummary(s)}
+                      onDelete={() => deleteSummary(s.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
       <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="Nombre del resumen (opcional)"
-            style={{
-              flex: 1,
-              minWidth: 200,
-              padding: '12px 16px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1.5px solid var(--soft-grey)',
-              background: 'white',
-              fontSize: 14,
-              color: 'var(--text-dark)',
-              outline: 'none',
-              transition: 'var(--transition)',
-            }}
+            style={inputStyle}
+            onFocus={e => e.target.style.borderColor = 'var(--driftwood)'}
+            onBlur={e => e.target.style.borderColor = 'var(--soft-grey)'}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <input
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            placeholder="Materia (ej: Anatomía, Fisiología...)"
+            style={inputStyle}
             onFocus={e => e.target.style.borderColor = 'var(--driftwood)'}
             onBlur={e => e.target.style.borderColor = 'var(--soft-grey)'}
           />
@@ -193,7 +252,7 @@ export default function Home() {
                 padding: '16px',
                 borderRadius: 'var(--radius-md)',
                 border: '1.5px solid var(--soft-grey)',
-                background: 'white',
+                background: 'var(--pale-mist)',
                 fontSize: 14,
                 color: 'var(--text-dark)',
                 lineHeight: 1.7,
@@ -283,7 +342,102 @@ function HeroSection() {
 }
 
 function SummaryCard({ summary, onOpen, onDelete }) {
+  const { updateSummary } = useMila();
   const [hovered, setHovered] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(summary.title);
+  const [editSubject, setEditSubject] = useState(summary.subject || '');
+
+  function handleSaveEdit(e) {
+    e.stopPropagation();
+    updateSummary(summary.id, { title: editTitle, subject: editSubject });
+    setEditing(false);
+  }
+
+  function handleStartEdit(e) {
+    e.stopPropagation();
+    setEditTitle(summary.title);
+    setEditSubject(summary.subject || '');
+    setEditing(true);
+  }
+
+  if (editing) {
+    return (
+      <div
+        style={{
+          padding: '20px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--pale-mist)',
+          border: '1.5px solid var(--driftwood)',
+          position: 'relative',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <input
+          value={editTitle}
+          onChange={e => setEditTitle(e.target.value)}
+          placeholder="Título"
+          autoFocus
+          style={{
+            width: '100%',
+            marginBottom: 8,
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--soft-grey)',
+            background: 'var(--ghost-white)',
+            fontSize: 14,
+            color: 'var(--text-dark)',
+            outline: 'none',
+          }}
+        />
+        <input
+          value={editSubject}
+          onChange={e => setEditSubject(e.target.value)}
+          placeholder="Materia"
+          style={{
+            width: '100%',
+            marginBottom: 12,
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--soft-grey)',
+            background: 'var(--ghost-white)',
+            fontSize: 13,
+            color: 'var(--text-dark)',
+            outline: 'none',
+          }}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleSaveEdit}
+            style={{
+              padding: '6px 16px',
+              borderRadius: 20,
+              background: 'var(--ash-plum)',
+              color: 'white',
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+          >
+            Guardar
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); setEditing(false); }}
+            style={{
+              padding: '6px 16px',
+              borderRadius: 20,
+              background: 'transparent',
+              border: '1px solid var(--soft-grey)',
+              color: 'var(--text-mid)',
+              fontSize: 12,
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -304,18 +458,47 @@ function SummaryCard({ summary, onOpen, onDelete }) {
       <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
         {new Date(summary.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
       </div>
-      <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 8 }}>
+      <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4, paddingRight: 48 }}>
         {summary.title}
       </div>
+      {summary.subject && (
+        <div style={{ fontSize: 11, color: 'var(--ash-plum)', marginBottom: 8, fontWeight: 500 }}>
+          {summary.subject}
+        </div>
+      )}
       <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5 }}>
         {summary.text ? `${summary.text.slice(0, 80)}...` : `${summary.images.length} imagen(es)`}
       </div>
-      {summary.images.length > 0 && (
+      {summary.images && summary.images.length > 0 && (
         <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
           {summary.images.slice(0, 3).map((img, i) => (
             <img key={i} src={img.src} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8 }} />
           ))}
         </div>
+      )}
+      {/* Edit button */}
+      {hovered && (
+        <button
+          onClick={handleStartEdit}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 40,
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            background: 'var(--soft-grey)',
+            color: 'var(--text-mid)',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'var(--transition)',
+          }}
+          title="Editar"
+        >
+          ✏
+        </button>
       )}
       <button
         onClick={e => { e.stopPropagation(); onDelete(); }}

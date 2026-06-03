@@ -1,5 +1,11 @@
 const API_KEY = process.env.REACT_APP_ANTHROPIC_KEY;
-const MAX_TEXT = 5000;
+
+function smartSample(text, maxLen = 5000) {
+  if (text.length <= maxLen) return text;
+  const third = Math.floor(maxLen / 3);
+  const mid = Math.floor(text.length / 2);
+  return text.slice(0, third) + '\n...\n' + text.slice(mid - Math.floor(third / 2), mid + Math.floor(third / 2)) + '\n...\n' + text.slice(-third);
+}
 
 async function askClaude(prompt) {
   if (!API_KEY) throw new Error('No API key configurada');
@@ -29,7 +35,7 @@ export async function generateFlashcardsAI(text) {
   const prompt = `Profesor de medicina. Genera 10 flashcards del resumen. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, MAX_TEXT)}
+${smartSample(text)}
 
 Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
 [
@@ -54,7 +60,7 @@ export async function generateQuestionsAI(text) {
   const prompt = `Profesor de medicina. Genera 8 preguntas de opción múltiple. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, MAX_TEXT)}
+${smartSample(text)}
 
 Responde SOLO con un JSON válido, sin texto adicional:
 [
@@ -79,7 +85,7 @@ export async function generateConceptMapAI(text) {
   const prompt = `Profesor de medicina. Crea un mapa conceptual jerárquico. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, MAX_TEXT)}
+${smartSample(text)}
 
 Responde SOLO con un JSON válido, sin texto adicional:
 {
