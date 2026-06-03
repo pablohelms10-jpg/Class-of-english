@@ -80,29 +80,49 @@ async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
   const selected = spreadImages(images, 6);
 
-  const prompt = `Tenés ${selected.length} imágenes anatómicas numeradas y ${topics.length} temas.
-Para cada tema, indicá cuál imagen (0 a ${selected.length - 1}) lo ilustra mejor. Si ninguna es relevante, ponés null.
+  const prompt = `Tenés ${selected.length} imágenes anatómicas (índices 0 a ${selected.length - 1}) y ${topics.length} temas médicos.
 
 TEMAS:
 ${topics.map((t, i) => `${i}: "${t}"`).join('\n')}
 
-Responde SOLO con JSON sin texto extra:
-{"matches": [0, null, 1, null, 2, null, 0, null, null, null]}
-(exactamente ${topics.length} valores en el array, en orden)`;
+Para cada tema, asigná el índice de imagen que MEJOR lo representa visualmente.
+REGLAS IMPORTANTES:
+- Asigná SIEMPRE una imagen a cada tema si las imágenes son del mismo tema general
+- Podés repetir el mismo índice en varios temas
+- Solo usá null si el tema es puramente abstracto (ej: fechas, nombres propios sin anatomía)
+- La mayoría de los temas deben tener una imagen asignada
+
+Responde SOLO con JSON (exactamente ${topics.length} valores):
+{"matches": [0, 1, 0, 2, 1, 3, 0, null, 2, 1]}`;
 
   try {
     const raw = await askClaude(prompt, selected);
-    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
-    if (!jsonMatch) return topics.map(() => null);
-    const { matches } = JSON.parse(jsonMatch[0]);
-    return (matches || []).map(idx => {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return distributeImages(topics.length, selected);
+    const parsed = JSON.parse(jsonMatch[0]);
+    const matches = parsed.matches || [];
+    const result = matches.map(idx => {
       if (idx == null || idx === 'null') return null;
       const n = parseInt(idx);
-      return isNaN(n) ? null : (selected[n]?._origIdx ?? n);
+      return isNaN(n) ? null : (selected[n]?._origIdx ?? null);
     });
+    // If Claude returned all nulls, distribute images evenly as fallback
+    if (result.every(v => v == null)) return distributeImages(topics.length, selected);
+    // Pad with nulls if too short
+    while (result.length < topics.length) result.push(null);
+    return result;
   } catch {
-    return topics.map(() => null);
+    return distributeImages(topics.length, selected);
   }
+}
+
+// Spread available images across topics when AI matching fails
+function distributeImages(count, selected) {
+  if (!selected || selected.length === 0) return Array(count).fill(null);
+  return Array.from({ length: count }, (_, i) => {
+    const img = selected[i % selected.length];
+    return img?._origIdx ?? null;
+  });
 }
 
 // Returns { cards, allCovered }
