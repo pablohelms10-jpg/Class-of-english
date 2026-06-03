@@ -1,4 +1,5 @@
 const API_KEY = process.env.REACT_APP_ANTHROPIC_KEY;
+const MAX_TEXT = 3000; // limitar tokens enviados
 
 async function askClaude(prompt) {
   if (!API_KEY) throw new Error('No API key configurada');
@@ -12,7 +13,7 @@ async function askClaude(prompt) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -25,10 +26,10 @@ async function askClaude(prompt) {
 }
 
 export async function generateFlashcardsAI(text) {
-  const prompt = `Eres un profesor universitario de medicina. Analiza el siguiente resumen y genera exactamente 15 flashcards de estudio de alta calidad.
+  const prompt = `Profesor de medicina. Genera 10 flashcards del resumen. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, 8000)}
+${text.slice(0, MAX_TEXT)}
 
 Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
 [
@@ -40,10 +41,8 @@ Responde SOLO con un JSON válido, sin texto adicional, con este formato exacto:
 ]
 
 Reglas:
-- Las preguntas deben ser específicas y educativamente valiosas
-- Prioriza definiciones, funciones, relaciones anatómicas, mecanismos
-- Las respuestas deben ser cortas y memorables
-- Varía los tipos: definición, función, ubicación, relación entre estructuras`;
+- Preguntas específicas sobre definiciones, funciones, relaciones
+- Respuestas cortas y memorables. Máximo 10 flashcards.`;
 
   const raw = await askClaude(prompt);
   const match = raw.match(/\[[\s\S]*\]/);
@@ -52,10 +51,10 @@ Reglas:
 }
 
 export async function generateQuestionsAI(text) {
-  const prompt = `Eres un profesor universitario de medicina creando un examen. Analiza el resumen y genera 10 preguntas de opción múltiple de nivel universitario.
+  const prompt = `Profesor de medicina. Genera 8 preguntas de opción múltiple. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, 8000)}
+${text.slice(0, MAX_TEXT)}
 
 Responde SOLO con un JSON válido, sin texto adicional:
 [
@@ -68,9 +67,7 @@ Responde SOLO con un JSON válido, sin texto adicional:
 ]
 
 Reglas:
-- Las opciones incorrectas deben ser plausibles y del mismo tema
-- Las preguntas deben evaluar comprensión, no solo memorización
-- Mezcla preguntas sobre conceptos, relaciones y aplicaciones`;
+- Opciones incorrectas plausibles del mismo tema. Máximo 8 preguntas.`;
 
   const raw = await askClaude(prompt);
   const match = raw.match(/\[[\s\S]*\]/);
@@ -79,10 +76,10 @@ Reglas:
 }
 
 export async function generateConceptMapAI(text) {
-  const prompt = `Eres un profesor universitario de medicina. Analiza el resumen y crea un mapa conceptual jerárquico.
+  const prompt = `Profesor de medicina. Crea un mapa conceptual jerárquico. Solo JSON, sin texto extra.
 
 RESUMEN:
-${text.slice(0, 8000)}
+${text.slice(0, MAX_TEXT)}
 
 Responde SOLO con un JSON válido, sin texto adicional:
 {
@@ -103,10 +100,7 @@ Responde SOLO con un JSON válido, sin texto adicional:
 }
 
 Reglas:
-- Máximo 12 nodos
-- Jerarquía real del contenido: tema → subtemas → detalles
-- Labels cortos (máximo 4 palabras)
-- Distribuye los nodos en el espacio 800x560px sin superposición`;
+- Máximo 8 nodos, labels de 1-3 palabras, jerarquía real del contenido.`;
 
   const raw = await askClaude(prompt);
   const match = raw.match(/\{[\s\S]*\}/);
