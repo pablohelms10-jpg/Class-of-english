@@ -97,7 +97,7 @@ export default function SummaryDetail() {
       {activeMode === 'map' && <ConceptMapMode text={activeSummary.text} />}
       {activeMode === 'images' && <ImagesMode images={activeSummary.images} />}
 
-      <ContentEditorPanel open={editorOpen} onClose={() => setEditorOpen(false)} summary={activeSummary} />
+      {editorOpen && <ContentEditorPanel open={true} onClose={() => setEditorOpen(false)} summary={activeSummary} />}
     </div>
   );
 }
