@@ -124,6 +124,7 @@ export default function ConceptMapMode({ summary }) {
   const [dragging, setDragging] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [nodeGenerating, setNodeGenerating] = useState({});
+  const [reassigning, setReassigning] = useState(false);
 
   const panRef = useRef(pan);
   const scaleRef = useRef(scale);
@@ -425,6 +426,18 @@ export default function ConceptMapMode({ summary }) {
     setNodeGenerating(prev => ({ ...prev, [node.id]: null }));
   }
 
+  async function reassignImages() {
+    if (!mapData || images.length === 0) return;
+    setReassigning(true);
+    try {
+      const withImg = await assignImagesToNodes(mapData.nodes, images);
+      const updated = { ...mapData, nodes: withImg };
+      setMapData(updated);
+      updateSummary(summary.id, { conceptMap: updated });
+    } catch { /* silent */ }
+    setReassigning(false);
+  }
+
   async function generateNodeQs(node) {
     setNodeGenerating(prev => ({ ...prev, [node.id]: 'questions' }));
     try {
@@ -491,6 +504,16 @@ export default function ConceptMapMode({ summary }) {
           <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 34, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
           <button onClick={() => zoom(1 / 1.2)} style={toolBtnStyle} title="Alejar">−</button>
           <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
+          {images.length > 0 && (
+            <button
+              onClick={reassignImages}
+              disabled={reassigning}
+              title="Reasignar imágenes leyendo el texto de cada imagen"
+              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto', opacity: reassigning ? 0.5 : 1 }}
+            >
+              {reassigning ? '⟳ Asignando…' : '🖼 Imágenes'}
+            </button>
+          )}
           <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto' }}>↺ Regenerar</button>
           <button
             onClick={toggleFullscreen}

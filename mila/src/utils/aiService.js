@@ -76,27 +76,36 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
 }
 
 // Global image assignment: one API call assigns the best unique image to each topic.
-// Prevents the same image being assigned to multiple unrelated concepts.
+// Primary rule: read text labels written INSIDE each image and match literally.
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
   // Up to 12 images spread evenly, keeping original indices
   const selected = spreadImages(images, Math.min(images.length, 12));
 
-  const prompt = `Sos un experto en anatomía. Tenés ${selected.length} imágenes (índices 0–${selected.length - 1}) y ${topics.length} conceptos.
+  const prompt = `Sos un profesor de anatomía analizando diapositivas de un resumen médico.
+Tenés ${selected.length} imágenes (índices 0–${selected.length - 1}) y ${topics.length} conceptos.
 
 CONCEPTOS:
 ${topics.map((t, i) => `${i}. "${t}"`).join('\n')}
 
-TAREA: Asigná a cada concepto el índice de la imagen que mejor lo representa visualmente.
+PASO 1 — LEER CADA IMAGEN:
+Para cada imagen, leé TODO el texto escrito en ella (títulos, etiquetas, flechas, leyendas, nombres anatómicos).
+Ese texto es la fuente de verdad más confiable.
 
-REGLAS:
-- Cada imagen puede usarse como máximo UNA vez en toda la asignación
-- Si ninguna imagen representa bien un concepto (relevancia baja), usá null
-- Priorizá imágenes que muestren ESPECÍFICAMENTE ese concepto como foco principal
-- Penalizá imágenes de texto/listas sin ilustración, o imágenes de un concepto diferente aunque sea del mismo campo
+PASO 2 — ASIGNAR POR COINCIDENCIA EXACTA:
+- Si una imagen dice "Hueso Cigomático" → va al concepto "Hueso Cigomático" (no a otro hueso)
+- Si una imagen dice "Articulación Temporomandibular" → va a ese concepto exacto
+- Si el texto de la imagen NO coincide con ningún concepto → null
+- Si la imagen no tiene texto claro → usá el contenido visual, pero siendo muy estricto
+- NUNCA asignes una imagen a un concepto diferente al que nombra
 
-Respondé SOLO con JSON, un valor por concepto (índice de imagen o null):
+PASO 3 — UNICIDAD:
+- Cada imagen puede usarse como máximo UNA vez
+- Si dos conceptos reclaman la misma imagen, asignala solo al que coincide más exactamente
+- Si ninguna imagen corresponde a un concepto, usá null (es mejor null que una imagen incorrecta)
+
+Respondé SOLO con JSON, exactamente ${topics.length} valores (índice numérico o null):
 {"assignments": [0, null, 2, 1, null]}`;
 
   try {
@@ -302,7 +311,8 @@ export function quickAssignImages(count, images) {
 // Assigns images to concept map nodes via vision
 export async function assignImagesToNodes(nodes, images) {
   if (!images || images.length === 0) return nodes;
-  const topics = nodes.map(n => n.label + (n.summary ? ': ' + n.summary : ''));
+  // Use only the label so it matches exactly against text written in the images
+  const topics = nodes.map(n => n.label);
   const imageMatches = await matchImages(topics, images);
   return nodes.map((n, i) => ({ ...n, imageIndex: imageMatches[i] ?? null }));
 }
