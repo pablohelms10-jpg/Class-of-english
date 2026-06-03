@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useMila } from '../../context/MilaContext';
-import { generateConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI } from '../../utils/aiService';
+import { generateConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI, generateNodeFlashcardsAI, generateNodeQuestionsAI } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
@@ -123,6 +123,7 @@ export default function ConceptMapMode({ summary }) {
   const [isPanning, setIsPanning] = useState(false);
   const [dragging, setDragging] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [nodeGenerating, setNodeGenerating] = useState({});
 
   const panRef = useRef(pan);
   const scaleRef = useRef(scale);
@@ -413,6 +414,28 @@ export default function ConceptMapMode({ summary }) {
     updateSummary(summary.id, { masteredNodes: updated });
   }
 
+  async function generateNodeCards(node) {
+    setNodeGenerating(prev => ({ ...prev, [node.id]: 'flashcards' }));
+    try {
+      const existing = (summary.flashcards || []).filter(f => f.conceptLabel === node.label);
+      const newCards = await generateNodeFlashcardsAI(node, existing);
+      const merged = [...(summary.flashcards || []), ...newCards];
+      updateSummary(summary.id, { flashcards: merged });
+    } catch { /* silent */ }
+    setNodeGenerating(prev => ({ ...prev, [node.id]: null }));
+  }
+
+  async function generateNodeQs(node) {
+    setNodeGenerating(prev => ({ ...prev, [node.id]: 'questions' }));
+    try {
+      const existing = (summary.questions || []).filter(q => q.conceptLabel === node.label);
+      const newQs = await generateNodeQuestionsAI(node, existing);
+      const merged = [...(summary.questions || []), ...newQs];
+      updateSummary(summary.id, { questions: merged });
+    } catch { /* silent */ }
+    setNodeGenerating(prev => ({ ...prev, [node.id]: null }));
+  }
+
   if (loading) return <MilaLoadingScreen message="MILA está construyendo el mapa conceptual…" sub="Analizando el contenido…" />;
 
   if (!mapData || !mapData.nodes?.length) return (
@@ -564,6 +587,9 @@ export default function ConceptMapMode({ summary }) {
             // Find linked flashcard and question for this node
             const linkedCard = flashcards.find(f => f.conceptLabel === node.label) || null;
             const linkedQuestion = questions.find(q => q.conceptLabel === node.label) || null;
+            const nodeCardCount = flashcards.filter(f => f.conceptLabel === node.label).length;
+            const nodeQCount = questions.filter(q => q.conceptLabel === node.label).length;
+            const genState = nodeGenerating[node.id] || null;
 
             return (
               <div key={node.id} style={{
@@ -618,6 +644,44 @@ export default function ConceptMapMode({ summary }) {
 
                       {/* Inline mini question */}
                       {linkedQuestion && <MiniQuestion question={linkedQuestion} />}
+
+                      {/* Per-node generate buttons */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); generateNodeCards(node); }}
+                          disabled={!!genState}
+                          style={{
+                            flex: 1, padding: '6px 8px', borderRadius: 7,
+                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
+                            background: 'transparent',
+                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
+                            opacity: genState && genState !== 'flashcards' ? 0.4 : 1,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            transition: 'opacity 0.15s',
+                          }}
+                        >
+                          {genState === 'flashcards' ? '⟳' : '＋'}
+                          {nodeCardCount > 0 ? `Flashcards (${nodeCardCount})` : 'Flashcards'}
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); generateNodeQs(node); }}
+                          disabled={!!genState}
+                          style={{
+                            flex: 1, padding: '6px 8px', borderRadius: 7,
+                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
+                            background: 'transparent',
+                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
+                            opacity: genState && genState !== 'questions' ? 0.4 : 1,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            transition: 'opacity 0.15s',
+                          }}
+                        >
+                          {genState === 'questions' ? '⟳' : '＋'}
+                          {nodeQCount > 0 ? `Preguntas (${nodeQCount})` : 'Preguntas'}
+                        </button>
+                      </div>
 
                       {/* Mastery button */}
                       <button

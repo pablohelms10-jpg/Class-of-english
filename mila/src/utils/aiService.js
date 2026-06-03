@@ -75,75 +75,46 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
   return data.content[0].text;
 }
 
-// Semantic ranking: for each topic, score ALL available images and pick the best match.
-// Sends batches of up to 8 images per API call, scores each 0-10, selects highest.
+// Global image assignment: one API call assigns the best unique image to each topic.
+// Prevents the same image being assigned to multiple unrelated concepts.
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
-  // Use all images (up to 20) spread evenly, keeping original indices
-  const selected = spreadImages(images, Math.min(images.length, 20));
+  // Up to 12 images spread evenly, keeping original indices
+  const selected = spreadImages(images, Math.min(images.length, 12));
 
-  // Split images into batches of 8 to stay within API limits
-  const BATCH = 8;
-  const batches = [];
-  for (let i = 0; i < selected.length; i += BATCH) {
-    batches.push(selected.slice(i, i + BATCH));
-  }
+  const prompt = `Sos un experto en anatomía. Tenés ${selected.length} imágenes (índices 0–${selected.length - 1}) y ${topics.length} conceptos.
 
-  // For each topic, find the image with highest relevance score across all batches
-  const results = await Promise.all(topics.map(async (topic, ti) => {
-    let bestScore = -1;
-    let bestOrigIdx = null;
+CONCEPTOS:
+${topics.map((t, i) => `${i}. "${t}"`).join('\n')}
 
-    for (const batch of batches) {
-      const batchOffset = selected.indexOf(batch[0]);
-      const prompt = `Sos un experto en anatomía. Tenés ${batch.length} imágenes (índices 0–${batch.length - 1}).
+TAREA: Asigná a cada concepto el índice de la imagen que mejor lo representa visualmente.
 
-CONCEPTO A EVALUAR: "${topic}"
+REGLAS:
+- Cada imagen puede usarse como máximo UNA vez en toda la asignación
+- Si ninguna imagen representa bien un concepto (relevancia baja), usá null
+- Priorizá imágenes que muestren ESPECÍFICAMENTE ese concepto como foco principal
+- Penalizá imágenes de texto/listas sin ilustración, o imágenes de un concepto diferente aunque sea del mismo campo
 
-Para cada imagen, asigná una puntuación de 0 a 10 según qué tan bien representa ESPECÍFICAMENTE el concepto.
+Respondé SOLO con JSON, un valor por concepto (índice de imagen o null):
+{"assignments": [0, null, 2, 1, null]}`;
 
-CRITERIOS DE PUNTUACIÓN:
-- 9-10: La imagen muestra ESPECÍFICAMENTE ese concepto como foco principal (ej: diagrama del platisma para "Platisma")
-- 7-8: La imagen muestra el concepto claramente aunque no sea el único tema
-- 4-6: El concepto aparece en la imagen pero no es el foco
-- 1-3: El concepto solo está mencionado de texto o aparece marginalmente
-- 0: La imagen no tiene relación con el concepto
-
-PENALIZACIONES (restar puntos):
-- Si es una lista de texto sin ilustración: -3
-- Si es una diapositiva completa con muchos temas: -2
-- Si muestra un concepto diferente aunque sea del mismo campo: -4
-
-Respondé SOLO con JSON con exactamente ${batch.length} valores numéricos:
-{"scores": [8, 2, 9, 0, 5, 3, 7, 1]}`;
-
-      try {
-        const raw = await askClaude(prompt, batch);
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) continue;
-        const parsed = JSON.parse(jsonMatch[0]);
-        const scores = parsed.scores || [];
-        scores.forEach((score, bi) => {
-          const s = typeof score === 'number' ? score : parseFloat(score) || 0;
-          if (s > bestScore) {
-            bestScore = s;
-            bestOrigIdx = batch[bi]?._origIdx ?? null;
-          }
-        });
-      } catch { continue; }
-    }
-
-    // Only assign image if relevance score is meaningful (>= 5)
-    return bestScore >= 5 ? bestOrigIdx : null;
-  }));
-
-  // If everything came back null (API failed), fall back to even distribution
-  if (results.every(v => v == null)) {
+  try {
+    const raw = await askClaude(prompt, selected);
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('no json');
+    const parsed = JSON.parse(jsonMatch[0]);
+    const assignments = parsed.assignments || [];
+    return topics.map((_, i) => {
+      const si = assignments[i];
+      if (si == null) return null;
+      const idx = typeof si === 'number' ? si : parseInt(si);
+      if (isNaN(idx) || idx < 0 || idx >= selected.length) return null;
+      return selected[idx]?._origIdx ?? null;
+    });
+  } catch {
     return distributeImages(topics.length, selected);
   }
-
-  return results;
 }
 
 // Spread available images across topics when AI matching fails
@@ -252,6 +223,73 @@ Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 
   }
 
   return { questions, allCovered: false };
+}
+
+// Generate flashcards specifically for a single concept map node
+export async function generateNodeFlashcardsAI(node, existingCards = []) {
+  const nodeText = [node.label, node.summary, node.content, ...(node.bullets || [])].filter(Boolean).join('\n');
+  const existingList = existingCards.length > 0
+    ? `\nFLASHCARDS YA CREADAS (NO repetir):\n${existingCards.map(c => `- ${c.front}`).join('\n')}\n`
+    : '';
+
+  const prompt = `Eres un profesor de medicina. Genera 3-5 flashcards sobre el concepto: "${node.label}".${existingList}
+
+CONTENIDO DEL CONCEPTO:
+${nodeText}
+
+Respondé SOLO con JSON array:
+[
+  {
+    "front": "¿Pregunta específica sobre ${node.label}?",
+    "back": "Respuesta concisa",
+    "context": "Dato del concepto que respalda esto"
+  }
+]
+
+Máximo 5 flashcards. Solo sobre este concepto específico.`;
+
+  const raw = await askClaude(prompt);
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('Respuesta inválida de la IA');
+  return JSON.parse(match[0]).map((c, i) => ({
+    ...c,
+    id: Date.now() + i,
+    conceptLabel: node.label,
+  }));
+}
+
+// Generate multiple-choice questions for a single concept map node
+export async function generateNodeQuestionsAI(node, existingQuestions = []) {
+  const nodeText = [node.label, node.summary, node.content, ...(node.bullets || [])].filter(Boolean).join('\n');
+  const existingList = existingQuestions.length > 0
+    ? `\nPREGUNTAS YA CREADAS (NO repetir):\n${existingQuestions.map(q => `- ${q.question}`).join('\n')}\n`
+    : '';
+
+  const prompt = `Eres un profesor de medicina. Genera 2-3 preguntas de opción múltiple sobre el concepto: "${node.label}".${existingList}
+
+CONTENIDO DEL CONCEPTO:
+${nodeText}
+
+Respondé SOLO con JSON array:
+[
+  {
+    "question": "Pregunta sobre ${node.label}",
+    "options": ["A", "B", "C", "D"],
+    "correct": "Opción correcta exacta",
+    "explanation": "Por qué es correcta"
+  }
+]
+
+Máximo 3 preguntas. Solo sobre este concepto específico.`;
+
+  const raw = await askClaude(prompt);
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('Respuesta inválida de la IA');
+  return JSON.parse(match[0]).map((q, i) => ({
+    ...q,
+    id: Date.now() + i,
+    conceptLabel: node.label,
+  }));
 }
 
 // Immediately distribute images across items without any API call
