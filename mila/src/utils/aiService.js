@@ -1,5 +1,5 @@
 const API_KEY = process.env.REACT_APP_ANTHROPIC_KEY;
-const MAX_TEXT = 3000; // limitar tokens enviados
+const MAX_TEXT = 5000;
 
 async function askClaude(prompt) {
   if (!API_KEY) throw new Error('No API key configurada');
