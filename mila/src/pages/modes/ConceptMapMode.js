@@ -137,43 +137,27 @@ export default function ConceptMapMode({ summary }) {
   useEffect(() => { panRef.current = pan; }, [pan]);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
 
-  // Sync isFullscreen with native browser fullscreen state
+  // Lock body scroll in fullscreen — CSS-portal only, no native Fullscreen API.
+  // This means only our button can exit fullscreen; the browser cannot override it.
   useEffect(() => {
-    const onFSChange = () => {
-      const nativeFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      if (!nativeFS && isFullscreen) setIsFullscreen(false);
-    };
-    document.addEventListener('fullscreenchange', onFSChange);
-    document.addEventListener('webkitfullscreenchange', onFSChange);
+    if (isFullscreen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
     return () => {
-      document.removeEventListener('fullscreenchange', onFSChange);
-      document.removeEventListener('webkitfullscreenchange', onFSChange);
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
     };
-  }, [isFullscreen]);
-
-  // Lock body scroll when using CSS-portal fullscreen (iOS fallback)
-  useEffect(() => {
-    document.body.style.overflow = isFullscreen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
   }, [isFullscreen]);
 
   function toggleFullscreen() {
-    if (isFullscreen) {
-      // Exit native or CSS fullscreen
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      setIsFullscreen(false);
-      return;
-    }
-    // Try native fullscreen API first (hides browser chrome on desktop + Android)
-    const el = document.documentElement;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
-    if (req) {
-      req.call(el).then(() => setIsFullscreen(true)).catch(() => setIsFullscreen(true));
-    } else {
-      // iOS Safari fallback: CSS portal covers viewport
-      setIsFullscreen(true);
-    }
+    setIsFullscreen(f => !f);
   }
 
   function applyNodes(nodes) {
@@ -266,7 +250,9 @@ export default function ConceptMapMode({ summary }) {
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
       if (e.ctrlKey || e.metaKey) {
-        zoom(e.deltaY < 0 ? 1.1 : 0.9, cx, cy);
+        // ctrlKey: trackpad pinch (deltaY in pixels) or Ctrl+scroll
+        // Use exponential mapping for smooth continuous zoom
+        zoom(Math.pow(0.997, e.deltaY), cx, cy);
       } else {
         if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
         const p = panRef.current;
@@ -280,7 +266,7 @@ export default function ConceptMapMode({ summary }) {
     let touchMoved = false;
 
     function handleTouchStart(e) {
-      // passive:false but do NOT call preventDefault here — just record positions
+      e.preventDefault();
       touchMoved = false;
       if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
       velocityRef.current = { x: 0, y: 0 };
