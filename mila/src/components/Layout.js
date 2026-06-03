@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from './MilaLogo';
 import DarkModeToggle from './DarkModeToggle';
+import LibraryPanel from './LibraryPanel';
 
 export default function Layout({ children }) {
   const { activeSummary, setActiveSummary, setActiveMode, darkMode, toggleDark } = useMila();
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   return (
     <div style={{
@@ -29,7 +31,7 @@ export default function Layout({ children }) {
           onClick={() => { setActiveSummary(null); setActiveMode(null); }}
           style={{ display: 'flex', alignItems: 'center', gap: 10 }}
         >
-          <MilaLogo size={36} dark={darkMode} />
+          <MilaLogo size={36} dark={darkMode} noAnimate={true} />
           <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-dark)', letterSpacing: '0.08em', fontFamily: 'Inter, sans-serif' }}>MILA</span>
         </button>
 
@@ -47,6 +49,26 @@ export default function Layout({ children }) {
               </span>
             </div>
           )}
+          <button
+            onClick={() => setLibraryOpen(true)}
+            title="Biblioteca"
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'transparent',
+              border: '1.5px solid var(--soft-grey)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', transition: 'all 0.2s ease',
+              color: 'var(--text-mid)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--soft-grey)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="2" width="4" height="12" rx="1" fill="currentColor" opacity="0.7"/>
+              <rect x="6" y="2" width="4" height="12" rx="1" fill="currentColor" opacity="0.85"/>
+              <rect x="11" y="2" width="4" height="12" rx="1" fill="currentColor"/>
+            </svg>
+          </button>
           <DarkModeToggle dark={darkMode} onToggle={toggleDark} />
         </div>
       </header>
@@ -58,6 +80,7 @@ export default function Layout({ children }) {
       <footer style={{ padding: '16px 32px', textAlign: 'center', borderTop: `1px solid var(--soft-grey)` }}>
         <span style={{ fontSize: 11, color: 'var(--text-light)', letterSpacing: '0.5px' }}>MILA · Tu asistente de estudio</span>
       </footer>
+      <LibraryPanel open={libraryOpen} onClose={() => setLibraryOpen(false)} />
     </div>
   );
 }

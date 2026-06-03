@@ -70,28 +70,28 @@ input, textarea {
 }
 
 body.dark {
-  --ghost-white: #141414;
-  --pale-mist: #1C1C1C;
-  --soft-grey: #272727;
-  --whisper-grey: #333333;
-  --moonbeam: #181818;
-  --feather-fog: #161616;
-  --cloud-veil: #202020;
-  --feather-touch: #3A3A3A;
-  --driftwood: #A09890;
-  --ash-plum: #8A8380;
-  --text-dark: #EDEAE5;
-  --text-mid: #A09890;
-  --text-light: #666260;
-  --shadow-soft: 0 4px 24px rgba(0,0,0,0.4);
-  --shadow-card: 0 8px 40px rgba(0,0,0,0.5);
+  --ghost-white: #111111;
+  --pale-mist: #1A1A1A;
+  --soft-grey: #252525;
+  --whisper-grey: #303030;
+  --moonbeam: #141414;
+  --feather-fog: #121212;
+  --cloud-veil: #1E1E1E;
+  --feather-touch: #383838;
+  --driftwood: #C1B7AF;
+  --ash-plum: #B0A8A4;
+  --text-dark: #F5F2EE;
+  --text-mid: #C8C0BA;
+  --text-light: #888480;
+  --shadow-soft: 0 4px 24px rgba(0,0,0,0.5);
+  --shadow-card: 0 8px 40px rgba(0,0,0,0.6);
 }
 
 body.dark input,
 body.dark textarea {
-  background: #1C1C1C !important;
-  color: #EDEAE5 !important;
-  border-color: #333 !important;
+  background: #1A1A1A !important;
+  color: #F5F2EE !important;
+  border-color: #303030 !important;
 }
 
 body.dark input::placeholder,
