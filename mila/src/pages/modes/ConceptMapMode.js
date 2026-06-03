@@ -526,7 +526,40 @@ export default function ConceptMapMode({ summary }) {
       </div>
 
       {/* Canvas — touch-action:none forced on all children to prevent iOS scroll override */}
-      <style>{`[data-mila-map],[data-mila-map] *{touch-action:none!important;-webkit-user-select:none;user-select:none}`}</style>
+      <style>{`
+        [data-mila-map],[data-mila-map] *{touch-action:none!important;-webkit-user-select:none;user-select:none}
+        @keyframes nodeFloat {
+          0%,100%{transform:translateY(0px) scale(1);}
+          50%{transform:translateY(-4px) scale(1.005);}
+        }
+        @keyframes auroraBlob {
+          0%,100%{transform:translate(0,0) scale(1);opacity:0.055;}
+          33%{transform:translate(40px,-25px) scale(1.08);opacity:0.08;}
+          66%{transform:translate(-25px,18px) scale(0.95);opacity:0.06;}
+        }
+        @keyframes auroraBlob2 {
+          0%,100%{transform:translate(0,0) scale(1);opacity:0.045;}
+          40%{transform:translate(-35px,30px) scale(1.1);opacity:0.07;}
+          75%{transform:translate(28px,-18px) scale(0.93);opacity:0.05;}
+        }
+        @keyframes edgePulse {
+          0%,100%{opacity:0.38;}
+          50%{opacity:0.6;}
+        }
+        @keyframes glassShimmer {
+          0%{background-position:200% center;}
+          100%{background-position:-200% center;}
+        }
+        .mila-node-card {
+          border-radius:12px;
+          overflow:hidden;
+          will-change:transform;
+          transition:box-shadow 0.35s cubic-bezier(0.4,0,0.2,1),transform 0.35s cubic-bezier(0.4,0,0.2,1);
+        }
+        .mila-node-card:not(.is-dragging) {
+          animation: nodeFloat var(--float-dur,5.5s) ease-in-out var(--float-delay,0s) infinite;
+        }
+      `}</style>
       <div
         data-mila-map=""
         ref={containerRef}
@@ -540,17 +573,24 @@ export default function ConceptMapMode({ summary }) {
           flex: isFullscreen ? 1 : undefined,
           overflow: 'hidden',
           borderRadius: 10,
-          border: '1.5px solid var(--whisper-grey)',
+          border: '1px solid rgba(200,193,185,0.5)',
           position: 'relative',
           cursor: dragging ? 'grabbing' : isPanning ? 'grabbing' : 'grab',
           background: 'var(--pale-mist)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 20px rgba(0,0,0,0.06)',
           userSelect: 'none',
           touchAction: 'none',
           WebkitOverflowScrolling: 'auto',
         }}
       >
+        {/* Aurora blobs — very slow, barely visible, give depth to the canvas */}
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+          <div style={{ position: 'absolute', width: 520, height: 520, borderRadius: '50%', background: 'radial-gradient(circle, var(--ash-plum) 0%, transparent 70%)', top: '5%', left: '15%', animation: 'auroraBlob 18s ease-in-out infinite' }} />
+          <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, var(--driftwood) 0%, transparent 70%)', bottom: '10%', right: '20%', animation: 'auroraBlob2 22s ease-in-out infinite' }} />
+          <div style={{ position: 'absolute', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, var(--ash-plum) 0%, transparent 70%)', bottom: '30%', left: '55%', animation: 'auroraBlob 28s ease-in-out 6s infinite' }} />
+        </div>
         {/* Dot grid */}
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--whisper-grey) 1.2px, transparent 1.2px)', backgroundSize: '28px 28px', pointerEvents: 'none', zIndex: 0 }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, rgba(180,172,165,0.45) 1px, transparent 1px)', backgroundSize: '28px 28px', pointerEvents: 'none', zIndex: 0 }} />
 
         {/* Transformed canvas */}
         <div style={{
@@ -565,8 +605,12 @@ export default function ConceptMapMode({ summary }) {
           <svg style={{ position: 'absolute', inset: 0, width: CANVAS_W, height: CANVAS_H, pointerEvents: 'none', zIndex: 1 }}>
             <defs>
               <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="var(--driftwood)" opacity="0.6" />
+                <polygon points="0 0, 8 3, 0 6" fill="var(--driftwood)" opacity="0.55" />
               </marker>
+              <filter id="edgeGlow">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
             </defs>
             {edges.map((edge, i) => {
               const fromNode = nodes.find(n => n.id === edge.from);
@@ -577,12 +621,20 @@ export default function ConceptMapMode({ summary }) {
               const fx = fp.x + NODE_W / 2, fy = fp.y + 30;
               const tx = tp.x + NODE_W / 2, ty = tp.y + 30;
               const midY = (fy + ty) / 2;
+              const d = `M ${fx} ${fy} C ${fx} ${midY} ${tx} ${midY} ${tx} ${ty}`;
+              const delay = `${(i * 1.3) % 6}s`;
               return (
                 <g key={i}>
-                  <path d={`M ${fx} ${fy} C ${fx} ${midY} ${tx} ${midY} ${tx} ${ty}`}
-                    fill="none" stroke="var(--driftwood)" strokeWidth="1.5" opacity="0.5" markerEnd="url(#arrowhead)" />
+                  {/* Glow trail */}
+                  <path d={d} fill="none" stroke="var(--driftwood)" strokeWidth="4" opacity="0.07" strokeLinecap="round"
+                    style={{ animation: `edgePulse 4s ease-in-out ${delay} infinite` }} />
+                  {/* Main line */}
+                  <path d={d} fill="none" stroke="var(--driftwood)" strokeWidth="1.5" strokeLinecap="round"
+                    markerEnd="url(#arrowhead)"
+                    style={{ animation: `edgePulse 4s ease-in-out ${delay} infinite` }} />
                   {edge.label && (
-                    <text x={(fx + tx) / 2} y={midY - 5} textAnchor="middle" fontSize="10" fill="var(--text-light)" fontFamily="Inter, sans-serif">{edge.label}</text>
+                    <text x={(fx + tx) / 2} y={midY - 6} textAnchor="middle" fontSize="9.5" fill="var(--text-light)"
+                      fontFamily="Inter, sans-serif" opacity="0.75">{edge.label}</text>
                   )}
                 </g>
               );
@@ -614,19 +666,55 @@ export default function ConceptMapMode({ summary }) {
             const nodeQCount = questions.filter(q => q.conceptLabel === node.label).length;
             const genState = nodeGenerating[node.id] || null;
 
+            // Float duration and delay staggered per node so they don't sync
+            const floatDur = `${5 + (node.id % 4) * 0.7}s`;
+            const floatDelay = `${(node.id * 1.1) % 5}s`;
+
+            // Liquid Glass styles per node type
+            const glassMain = {
+              background: 'linear-gradient(135deg, rgba(107,76,119,0.82) 0%, rgba(139,115,85,0.82) 100%)',
+              backdropFilter: 'blur(24px) saturate(1.6)',
+              WebkitBackdropFilter: 'blur(24px) saturate(1.6)',
+              border: '1px solid rgba(255,255,255,0.28)',
+              boxShadow: isExpanded
+                ? '0 24px 56px rgba(107,76,119,0.40), inset 0 1px 0 rgba(255,255,255,0.35), 0 0 0 0.5px rgba(255,255,255,0.12)'
+                : '0 8px 28px rgba(107,76,119,0.28), inset 0 1px 0 rgba(255,255,255,0.3)',
+            };
+            const glassSub = {
+              background: 'rgba(255,255,255,0.68)',
+              backdropFilter: 'blur(20px) saturate(1.5)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.5)',
+              border: '1px solid rgba(193,183,175,0.55)',
+              boxShadow: isExpanded
+                ? '0 20px 48px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 0.5px rgba(139,115,85,0.18)'
+                : '0 4px 18px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85)',
+            };
+            const glassDetail = {
+              background: 'rgba(255,255,255,0.56)',
+              backdropFilter: 'blur(16px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+              border: '1px solid rgba(200,195,190,0.45)',
+              boxShadow: isExpanded
+                ? '0 16px 40px rgba(0,0,0,0.11), inset 0 1px 0 rgba(255,255,255,0.8)'
+                : '0 2px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.75)',
+            };
+            const glassStyle = isMain ? glassMain : isSub ? glassSub : glassDetail;
+
             return (
+              // Outer div: only position — no visual styles so drag math stays clean
               <div key={node.id} style={{
                 position: 'absolute', left: pos.x, top: pos.y, width: NODE_W,
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
-                borderRadius: 12,
-                boxShadow: isExpanded ? '0 16px 48px rgba(0,0,0,0.22)' : '0 4px 16px rgba(0,0,0,0.10)',
-                background: isMain
-                  ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)'
-                  : 'var(--ghost-white)',
-                border: isMain ? 'none' : `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
-                overflow: 'hidden',
-                transition: 'box-shadow 0.25s cubic-bezier(0.4,0,0.2,1)',
               }}>
+                {/* Inner glass card: all visuals + float animation */}
+                <div
+                  className={`mila-node-card${dragging?.id === node.id ? ' is-dragging' : ''}`}
+                  style={{
+                    '--float-dur': floatDur,
+                    '--float-delay': floatDelay,
+                    ...glassStyle,
+                  }}
+                >
                 {/* Header — drag handle + expand toggle */}
                 <div
                   onMouseDown={e => startNodeDrag(e, node)}
@@ -732,6 +820,7 @@ export default function ConceptMapMode({ summary }) {
                     </div>
                   </div>
                 )}
+                </div> {/* end glass card */}
               </div>
             );
           })}
