@@ -47,6 +47,18 @@ export default function Home() {
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [collapsedSubjects, setCollapsedSubjects] = useState({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+
+  function toggleSelect(id) {
+    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+
+  function deleteSelected() {
+    selected.forEach(id => deleteSummary(id));
+    setSelected(new Set());
+    setSelectMode(false);
+  }
 
   async function processFiles(files) {
     setLoading(true);
@@ -275,8 +287,28 @@ export default function Home() {
 
       {summaries.length > 0 && (
         <div style={{ marginTop: 48 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4 }}>Tus resúmenes</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>Selecciona uno para empezar a estudiar</p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-dark)' }}>Tus resúmenes</h2>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {selectMode && selected.size > 0 && (
+                <button
+                  onClick={deleteSelected}
+                  style={{ padding: '6px 14px', borderRadius: 20, background: '#c0392b', color: 'white', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}
+                >
+                  Eliminar {selected.size}
+                </button>
+              )}
+              <button
+                onClick={() => { setSelectMode(v => !v); setSelected(new Set()); }}
+                style={{ padding: '6px 14px', borderRadius: 20, background: selectMode ? 'var(--driftwood)' : 'var(--soft-grey)', color: selectMode ? 'white' : 'var(--text-mid)', fontSize: 12, fontWeight: 500, border: 'none', cursor: 'pointer' }}
+              >
+                {selectMode ? 'Cancelar' : 'Seleccionar'}
+              </button>
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>
+            {selectMode ? 'Toca los resúmenes que quieres eliminar' : 'Selecciona uno para empezar a estudiar'}
+          </p>
           {Object.entries(grouped).map(([subjectKey, subjectSummaries]) => (
             <div key={subjectKey} style={{ marginBottom: 28 }}>
               <button onClick={() => toggleSubject(subjectKey)} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
@@ -287,7 +319,15 @@ export default function Home() {
               {!collapsedSubjects[subjectKey] && (
                 <div className="summary-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
                   {subjectSummaries.map(s => (
-                    <SummaryCard key={s.id} summary={s} onOpen={() => setActiveSummary(s)} onOpenMode={(modeId) => openMode(s, modeId)} onDelete={() => deleteSummary(s.id)} />
+                    <SummaryCard
+                      key={s.id}
+                      summary={s}
+                      onOpen={selectMode ? () => toggleSelect(s.id) : () => setActiveSummary(s)}
+                      onOpenMode={(modeId) => openMode(s, modeId)}
+                      onDelete={() => deleteSummary(s.id)}
+                      selectMode={selectMode}
+                      selected={selected.has(s.id)}
+                    />
                   ))}
                 </div>
               )}
@@ -324,7 +364,7 @@ function HeroSection() {
   );
 }
 
-function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
+function SummaryCard({ summary, onOpen, onOpenMode, onDelete, selectMode, selected }) {
   const { updateSummary } = useMila();
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -429,18 +469,29 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
       style={{
         padding: '20px',
         borderRadius: 'var(--radius-md)',
-        background: 'var(--pale-mist)',
-        border: `1.5px solid ${hovered ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
+        background: selected ? 'rgba(193,165,124,0.12)' : 'var(--pale-mist)',
+        border: `1.5px solid ${selected ? 'var(--driftwood)' : hovered ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
         cursor: 'pointer',
         transition: 'var(--transition)',
         boxShadow: hovered ? 'var(--shadow-card)' : 'var(--shadow-soft)',
-        transform: hovered ? 'translateY(-2px)' : 'none',
+        transform: hovered && !selectMode ? 'translateY(-2px)' : 'none',
         position: 'relative',
         overflow: 'hidden',
       }}
       onClick={onOpen}
     >
-      <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+      {selectMode && (
+        <div style={{
+          position: 'absolute', top: 12, left: 12,
+          width: 20, height: 20, borderRadius: 6,
+          border: `2px solid ${selected ? 'var(--driftwood)' : 'var(--soft-grey)'}`,
+          background: selected ? 'var(--driftwood)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
+        }}>
+          {selected && <span style={{ color: 'white', fontSize: 11, fontWeight: 700 }}>✓</span>}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: 'var(--text-light)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.8px', paddingLeft: selectMode ? 28 : 0 }}>
         {new Date(summary.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
       </div>
       <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4, paddingRight: 48 }}>
@@ -468,8 +519,8 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
         </div>
       )}
 
-      {/* Stats + Edit buttons */}
-      {hovered && (
+      {/* Stats + Edit + Delete buttons — hidden in select mode */}
+      {!selectMode && hovered && (
         <>
           <button
             onClick={e => { e.stopPropagation(); setStatsOpen(true); }}
@@ -481,32 +532,16 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
             style={{ position: 'absolute', top: 12, right: 40, width: 24, height: 24, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-mid)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'var(--transition)' }}
             title="Editar"
           >✏</button>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+            style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-light)', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'var(--transition)' }}
+          >×</button>
         </>
       )}
       {statsOpen && ReactDOM.createPortal(
         <StatsModal summary={summary} onClose={() => setStatsOpen(false)} />,
         document.body
       )}
-      <button
-        onClick={e => { e.stopPropagation(); onDelete(); }}
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          width: 24,
-          height: 24,
-          borderRadius: '50%',
-          background: hovered ? 'var(--soft-grey)' : 'transparent',
-          color: 'var(--text-light)',
-          fontSize: 14,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'var(--transition)',
-        }}
-      >
-        ×
-      </button>
     </div>
   );
 }
