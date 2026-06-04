@@ -347,7 +347,7 @@ export default function ConceptMapMode({ summary }) {
               oy: (touchStartClient.y - rect.top - panRef.current.y) / scaleRef.current - pos.y,
             };
             touchMoved = true; // prevent expand toggle on lift
-          }, 1500);
+          }, 700);
         }
       } else {
         touchStartClient = null;
@@ -736,7 +736,7 @@ export default function ConceptMapMode({ summary }) {
           zIndex: 1,
         }}>
           {/* SVG edges */}
-          <svg style={{ position: 'absolute', inset: 0, width: CANVAS_W, height: CANVAS_H, pointerEvents: 'none', zIndex: 1 }}>
+          <svg style={{ position: 'absolute', inset: 0, width: CANVAS_W, height: CANVAS_H, pointerEvents: 'none', zIndex: 1, overflow: 'visible' }}>
             <defs>
               <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
                 <polygon points="0 0, 8 3, 0 6" fill="var(--driftwood)" opacity="0.6" />
