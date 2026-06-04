@@ -508,37 +508,37 @@ function cleanTextForMap(text) {
 
 export async function generateConceptMapAI(text) {
   const cleanText = cleanTextForMap(text);
-  const prompt = `Eres un profesor de medicina. Analiza el siguiente resumen y crea un mapa conceptual detallado y organizado sobre los temas REALES del texto.
+  const prompt = `Eres un asistente que organiza texto en un mapa conceptual. Tu única tarea es IDENTIFICAR qué partes del texto pertenecen a cada concepto y COPIARLAS TEXTUALMENTE, sin cambiar ni una sola palabra.
 
-RESUMEN:
+RESUMEN ORIGINAL:
 ${smartSample(cleanText)}
 
-Responde SOLO con JSON válido, sin texto antes ni después. Genera exactamente 10-12 nodos con títulos ESPECÍFICOS del contenido (no genéricos):
+Responde SOLO con JSON válido, sin texto antes ni después. Genera 10-12 nodos:
 {
-  "title": "Nombre real del tema",
+  "title": "Título exacto del tema tal como aparece en el texto",
   "nodes": [
     {
       "id": 0,
-      "label": "Nombre específico (2-4 palabras)",
+      "label": "Término exacto del texto (2-4 palabras)",
       "type": "main",
-      "summary": "Una oración resumiendo este concepto",
-      "content": "2-3 oraciones explicando los puntos clave de este concepto",
-      "bullets": ["Dato específico 1", "Dato específico 2", "Dato específico 3"],
+      "summary": "Primera oración del texto que introduce este concepto, COPIADA TEXTUALMENTE",
+      "content": "Párrafo o fragmento del texto original sobre este concepto, COPIADO TEXTUALMENTE sin cambiar ninguna palabra",
+      "bullets": ["Frase exacta del texto 1", "Frase exacta del texto 2", "Frase exacta del texto 3"],
       "x": 600, "y": 80
     }
   ],
   "edges": [{"from": 0, "to": 1, "label": "incluye"}]
 }
 
-Reglas estrictas:
-- 1 nodo "main" (tema central) en x≈600, y≈80
-- 3-5 nodos "sub" (subtemas principales) distribuidos en segunda fila
-- 5-7 nodos "detail" (conceptos específicos) en tercera fila
-- Los "label" deben ser términos MÉDICOS O TEMÁTICOS REALES extraídos del contenido
-- Distribuye en espacio 1200x900px con separación clara entre nodos
-- NUNCA uses como label: "Concepto 1", "Subtema A", "CARA 1", "CARA 2", "Página N", números de página, ni ninguna etiqueta estructural del documento
-- Si el texto contiene preguntas de examen, extrae los TEMAS que evalúan, no los números de pregunta ni etiquetas de cara/página
-- Los labels deben responder: ¿sobre qué TEMA trata este nodo?`;
+Reglas ABSOLUTAS:
+- summary, content y bullets deben ser CITAS TEXTUALES del resumen original — copiá las palabras exactas, sin parafrasear, sin resumir, sin cambiar nada
+- Si no encontrás texto suficiente para un campo, copiá el fragmento más relevante tal como está
+- label: término o frase corta tomada directamente del texto
+- 1 nodo "main" en x≈600, y≈80
+- 3-5 nodos "sub" en segunda fila, 5-7 nodos "detail" en tercera fila
+- Distribuí en espacio 1200x900px
+- NUNCA inventes, parafrasees ni resumas — solo copiá texto del original
+- NUNCA uses como label: "Concepto 1", "CARA 1", "Página N" ni etiquetas estructurales`;
 
   const raw = await askClaude(prompt, [], 4000);
   const match = raw.match(/\{[\s\S]*\}/);
