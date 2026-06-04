@@ -235,27 +235,27 @@ export default function QuizMode({ summary }) {
         <div style={{ height: '100%', width: `${(index / questions.length) * 100}%`, background: 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))', borderRadius: 4, transition: 'width 0.4s ease' }} />
       </div>
 
-      <div style={{ borderRadius: 'var(--radius-md)', background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 24, boxShadow: 'var(--shadow-soft)', overflow: 'hidden' }}>
+      <div style={{ borderRadius: 24, background: 'var(--pale-mist)', border: '1.5px solid var(--whisper-grey)', marginBottom: 20, boxShadow: 'var(--shadow-soft)', overflow: 'hidden' }}>
         {q.imageIndex != null && images[q.imageIndex] && (
-          <div style={{ width: '100%', height: 240, overflow: 'hidden' }}>
-            <img src={images[q.imageIndex].src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+          <div style={{ width: '100%', height: 220, overflow: 'hidden' }}>
+            <img src={images[q.imageIndex].src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
           </div>
         )}
-        <div style={{ padding: '20px 28px' }}>
-          <p style={{ fontSize: 17, color: 'var(--text-dark)', lineHeight: 1.7, margin: 0 }}>{q.question}</p>
+        <div style={{ padding: '20px 24px' }}>
+          <p style={{ fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.75, margin: 0 }}>{q.question}</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gap: 10, marginBottom: 24 }}>
         {q.options.map(option => {
           let bg = 'var(--pale-mist)', border = 'var(--whisper-grey)', color = 'var(--text-dark)';
           if (selected !== null) {
-            if (option === q.correct) { bg = 'rgba(123,174,127,0.12)'; border = 'rgba(123,174,127,0.5)'; color = '#4A8A4E'; }
+            if (option === q.correct) { bg = 'rgba(123,174,127,0.14)'; border = 'rgba(123,174,127,0.55)'; color = '#3d7a41'; }
             else if (option === selected) { bg = 'rgba(176,168,164,0.15)'; border = 'var(--ash-plum)'; color = 'var(--ash-plum)'; }
           }
           return (
             <button key={option} onClick={() => handleSelect(option)}
-              style={{ padding: '16px 20px', borderRadius: 'var(--radius-sm)', background: bg, border: `1.5px solid ${border}`, color, fontSize: 14, textAlign: 'left', transition: 'var(--transition)', cursor: selected !== null ? 'default' : 'pointer' }}>
+              style={{ padding: '15px 20px', borderRadius: 18, background: bg, border: `1.5px solid ${border}`, color, fontSize: 14, textAlign: 'left', transition: 'var(--transition)', cursor: selected !== null ? 'default' : 'pointer', lineHeight: 1.5 }}>
               {option}
             </button>
           );
@@ -263,9 +263,9 @@ export default function QuizMode({ summary }) {
       </div>
 
       {selected !== null && q.explanation && (
-        <div style={{ padding: '14px 18px', borderRadius: 'var(--radius-sm)', background: 'rgba(193,183,175,0.12)', border: '1px solid var(--feather-touch)', marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Explicación · </span>
-          <span style={{ fontSize: 13, color: 'var(--text-mid)', lineHeight: 1.6 }}>{q.explanation}</span>
+        <div style={{ padding: '14px 18px', borderRadius: 18, background: 'rgba(193,183,175,0.12)', border: '1px solid var(--feather-touch)', marginBottom: 16 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Explicación · </span>
+          <span style={{ fontSize: 13, color: 'var(--text-mid)', lineHeight: 1.65 }}>{q.explanation}</span>
         </div>
       )}
 

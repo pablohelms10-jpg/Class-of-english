@@ -15,12 +15,10 @@ export default function SummaryDetail() {
   const [statsOpen, setStatsOpen] = useState(false);
 
   useEffect(() => {
-    if (overlay) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    // Don't manipulate body overflow — the fixed overlay already prevents
+    // background interaction. Body overflow:hidden actually BLOCKS scroll
+    // inside fixed elements on iOS Safari.
+    return () => {};
   }, [overlay]);
 
   if (!activeSummary) return null;
@@ -104,8 +102,8 @@ export default function SummaryDetail() {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9999,
           background: 'var(--ghost-white)',
-          overflow: 'auto',
           display: 'flex', flexDirection: 'column',
+          overflow: 'hidden', // outer container does NOT scroll; inner area does
         }}>
           {/* Overlay header */}
           <div style={{
@@ -142,8 +140,13 @@ export default function SummaryDetail() {
             </button>
           </div>
 
-          {/* Overlay content */}
-          <div style={{ padding: '24px 20px', flex: 1 }}>
+          {/* Overlay content — this div scrolls, not the body */}
+          <div style={{
+            padding: '24px 20px', flex: 1,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch', // iOS momentum scroll
+            overscrollBehavior: 'contain',     // prevent background page scroll
+          }}>
             {overlay === 'flashcards' && <FlashcardsMode summary={activeSummary} />}
             {overlay === 'quiz' && <QuizMode summary={activeSummary} />}
           </div>

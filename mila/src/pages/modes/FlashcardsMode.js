@@ -199,38 +199,47 @@ export default function FlashcardsMode({ summary }) {
       <div
         onClick={() => setFlipped(f => !f)}
         style={{
-          minHeight: 240, borderRadius: 'var(--radius-lg)',
+          borderRadius: 28,
           background: flipped ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)' : 'var(--pale-mist)',
           border: `1.5px solid ${flipped ? 'transparent' : 'var(--whisper-grey)'}`,
           boxShadow: 'var(--shadow-card)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: 40, cursor: 'pointer',
+          overflow: 'hidden',
+          cursor: 'pointer',
           transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
           marginBottom: 24, position: 'relative',
         }}
       >
-        <div style={{ position: 'absolute', top: 16, right: 20, fontSize: 11, color: flipped ? 'rgba(255,255,255,0.6)' : 'var(--text-light)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-          {flipped ? 'Respuesta' : 'Pregunta · toca para ver'}
-        </div>
-        {known.has(card.id) && !flipped && (
-          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, color: '#7BAE7F' }}>✓ Ya la sabés</div>
-        )}
-        {unknown.has(card.id) && !flipped && (
-          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 11, color: 'var(--ash-plum)' }}>✗ Para repasar</div>
-        )}
-        {!flipped ? (
-          <p style={{ fontSize: 18, color: 'var(--text-dark)', textAlign: 'center', lineHeight: 1.7 }}>{card.front}</p>
-        ) : (
-          <div style={{ textAlign: 'center', width: '100%' }}>
-            {card.imageIndex != null && images[card.imageIndex] && (
-              <div style={{ width: 'calc(100% + 80px)', marginLeft: -40, marginTop: -40, marginBottom: 16, height: 220, overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
-                <img src={images[card.imageIndex].src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
-              </div>
-            )}
-            <p style={{ fontSize: 24, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 10 }}>{card.back}</p>
-            {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6 }}>{card.context}</p>}
+        {/* Image hero — full bleed at top, no padding bleeding issues */}
+        {flipped && card.imageIndex != null && images[card.imageIndex] && (
+          <div style={{ width: '100%', height: 200, overflow: 'hidden' }}>
+            <img
+              src={images[card.imageIndex].src}
+              alt=""
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
+            />
           </div>
         )}
+
+        {/* Card body */}
+        <div style={{ padding: '36px 32px 28px', display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 200, justifyContent: 'center', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 12, right: 16, fontSize: 10, color: flipped ? 'rgba(255,255,255,0.55)' : 'var(--text-light)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            {flipped ? 'Respuesta' : 'Toca para ver'}
+          </div>
+          {known.has(card.id) && !flipped && (
+            <div style={{ position: 'absolute', top: 12, left: 14, fontSize: 10, color: '#7BAE7F' }}>✓ Ya la sabés</div>
+          )}
+          {unknown.has(card.id) && !flipped && (
+            <div style={{ position: 'absolute', top: 12, left: 14, fontSize: 10, color: 'var(--ash-plum)' }}>✗ Para repasar</div>
+          )}
+          {!flipped ? (
+            <p style={{ fontSize: 18, color: 'var(--text-dark)', textAlign: 'center', lineHeight: 1.7 }}>{card.front}</p>
+          ) : (
+            <div style={{ textAlign: 'center', width: '100%' }}>
+              <p style={{ fontSize: 22, fontWeight: 600, color: 'white', fontFamily: 'Playfair Display, serif', marginBottom: 10 }}>{card.back}</p>
+              {card.context && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{card.context}</p>}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
