@@ -128,80 +128,114 @@ export default function StatsModal({ summary, onClose }) {
           </div>
 
           {/* Chart type toggle */}
-          {(flashcards.length > 0 || barData.length > 0) && (
+          {(flashcards.length > 0 || barData.length > 0 || totalNodes > 0) && (
             <div style={{ marginBottom: 16, display: 'flex', gap: 6 }}>
-              {['pie', 'bar'].map(t => (
+              {[
+                { id: 'pie', label: '⬤ Flashcards' },
+                { id: 'nodes', label: '◈ Nodos' },
+                { id: 'bar', label: '▮ Quiz' },
+              ].map(t => (
                 <button
-                  key={t}
-                  onClick={() => setChartType(t)}
+                  key={t.id}
+                  onClick={() => setChartType(t.id)}
                   style={{
-                    padding: '5px 14px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
-                    background: chartType === t ? 'var(--text-dark)' : 'transparent',
-                    color: chartType === t ? 'white' : 'var(--text-light)',
-                    border: `1px solid ${chartType === t ? 'var(--text-dark)' : 'var(--soft-grey)'}`,
+                    padding: '5px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
+                    background: chartType === t.id ? 'var(--driftwood)' : 'transparent',
+                    color: chartType === t.id ? '#fff' : 'var(--text-light)',
+                    border: `1px solid ${chartType === t.id ? 'var(--driftwood)' : 'var(--soft-grey)'}`,
+                    fontWeight: chartType === t.id ? 600 : 400,
                   }}
                 >
-                  {t === 'pie' ? '⬤ Circular' : '▮ Barras'}
+                  {t.label}
                 </button>
               ))}
             </div>
           )}
 
           {/* Charts */}
-          {chartType === 'pie' && flashcards.length > 0 && (
+          {chartType === 'pie' && (
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 12, fontWeight: 500 }}>Progreso en flashcards</div>
-              <PieChart data={pieData} />
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-                {pieData.map((d, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-light)' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
-                    {d.label}
+              {flashcards.length > 0 ? (
+                <>
+                  <PieChart data={pieData} />
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+                    {pieData.map((d, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-light)' }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                        {d.label}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-light)' }}>
+                  Aún no hay flashcards generadas
+                </div>
+              )}
             </div>
           )}
 
-          {chartType === 'bar' && barData.length > 0 && (
+          {chartType === 'nodes' && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 10, fontWeight: 500 }}>
+                Estado por nodo · {masteredCount}/{totalNodes} dominados
+              </div>
+              {totalNodes > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {nodes.map(n => {
+                    const mastered = !!masteredNodes[n.id];
+                    const nodeCards = flashcards.filter(f => f.conceptLabel === n.label);
+                    const knownNodeCards = nodeCards.filter(c => knownIds.has(c.id)).length;
+                    const cardPct = nodeCards.length > 0 ? Math.round((knownNodeCards / nodeCards.length) * 100) : null;
+                    return (
+                      <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: mastered ? '#7BAE7F' : cardPct != null && cardPct >= 60 ? 'var(--driftwood)' : 'var(--whisper-grey)',
+                        }} />
+                        <div style={{ flex: 1, fontSize: 11, color: 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {n.label}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          {cardPct != null && (
+                            <span style={{ fontSize: 10, color: 'var(--text-light)' }}>{cardPct}%</span>
+                          )}
+                          <div style={{ width: 60, height: 4, borderRadius: 2, background: 'var(--soft-grey)', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', borderRadius: 2,
+                              width: mastered ? '100%' : cardPct != null ? `${cardPct}%` : '0%',
+                              background: mastered ? '#7BAE7F' : 'var(--driftwood)',
+                              transition: 'width 0.4s ease',
+                            }} />
+                          </div>
+                          {mastered && <span style={{ fontSize: 9, color: '#7BAE7F', fontWeight: 600 }}>✓</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-light)' }}>
+                  Aún no hay mapa conceptual generado
+                </div>
+              )}
+            </div>
+          )}
+
+          {chartType === 'bar' && (
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 12, color: 'var(--text-light)', marginBottom: 4, fontWeight: 500 }}>
-                Historial de quizzes · Promedio: {avgPct}%
+                {barData.length > 0 ? `Historial de quizzes · Promedio: ${avgPct}%` : 'Historial de quizzes'}
               </div>
-              <BarChart data={barData} />
+              {barData.length > 0 ? <BarChart data={barData} /> : (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-light)' }}>
+                  Aún no hay quizzes completados
+                </div>
+              )}
             </div>
           )}
 
-          {chartType === 'bar' && barData.length === 0 && (
-            <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-light)', marginBottom: 24 }}>
-              Aún no hay quizzes completados
-            </div>
-          )}
-
-          {/* Strong / Weak nodes */}
-          {totalNodes > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, color: '#5a9060', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>✓ Dominados ({strongNodes.length})</div>
-                {strongNodes.length === 0
-                  ? <div style={{ fontSize: 12, color: 'var(--text-light)' }}>Ninguno aún</div>
-                  : strongNodes.map(n => (
-                    <div key={n.id} style={{ fontSize: 11, color: 'var(--text-mid)', padding: '4px 0', borderBottom: '1px solid var(--whisper-grey)' }}>{n.label}</div>
-                  ))
-                }
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--ash-plum)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>✗ Para repasar ({weakNodes.length})</div>
-                {weakNodes.length === 0
-                  ? <div style={{ fontSize: 12, color: 'var(--text-light)' }}>¡Todo dominado!</div>
-                  : weakNodes.slice(0, 6).map(n => (
-                    <div key={n.id} style={{ fontSize: 11, color: 'var(--text-mid)', padding: '4px 0', borderBottom: '1px solid var(--whisper-grey)' }}>{n.label}</div>
-                  ))
-                }
-                {weakNodes.length > 6 && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 4 }}>+{weakNodes.length - 6} más</div>}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
