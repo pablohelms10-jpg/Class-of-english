@@ -631,17 +631,20 @@ Reglas:
 - NUNCA uses labels genéricos
 - CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO. NUNCA repitas el nombre del archivo como label de múltiples nodos`;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const raw = await askClaude(prompt, selectedImages, 4000);
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) { if (attempt === 0) continue; throw new Error('Respuesta inválida de la IA'); }
-    const result = JSON.parse(match[0]);
-    // Validate: detect if most nodes share the same label prefix (bad generation)
-    const labels = (result.nodes || []).map(n => (n.label || '').slice(0, 15).toLowerCase());
-    const freq = {};
-    labels.forEach(l => { freq[l] = (freq[l] || 0) + 1; });
-    const maxRepeat = Math.max(...Object.values(freq));
-    if (maxRepeat > Math.ceil(labels.length * 0.4) && attempt === 0) continue; // retry once
+    if (!match) { if (attempt < 2) continue; throw new Error('Respuesta inválida de la IA'); }
+    let result;
+    try { result = JSON.parse(match[0]); } catch { if (attempt < 2) continue; throw new Error('JSON inválido'); }
+    if (!result.nodes?.length) { if (attempt < 2) continue; throw new Error('Mapa vacío'); }
+    // Reject if labels are not sufficiently unique (AI repeated the file title everywhere)
+    const labels = result.nodes.map(n => (n.label || '').trim().toLowerCase());
+    const uniqueLabels = new Set(labels);
+    if (uniqueLabels.size < Math.ceil(labels.length * 0.6)) {
+      console.warn(`[MILA] Bad map (attempt ${attempt + 1}): ${uniqueLabels.size}/${labels.length} unique labels — retrying`);
+      if (attempt < 2) continue;
+    }
     return result;
   }
   throw new Error('No se pudo generar un mapa válido');

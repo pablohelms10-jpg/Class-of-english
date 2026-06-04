@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useMila } from '../../context/MilaContext';
 import { generateConceptMapAI, expandConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI, generateNodeFlashcardsAI, generateNodeQuestionsAI } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
+import { idbLoadImages } from '../../utils/imageDB';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
 
@@ -140,7 +141,10 @@ export default function ConceptMapMode({ summary }) {
   const questions = summary?.questions || [];
 
   const [mapData, setMapData] = useState(cached || null);
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(true); // always wait for image load first
+  const [loadedImages, setLoadedImages] = useState(summary?.images || []);
+  const [imagesReady, setImagesReady] = useState((summary?.images?.length || 0) > 0);
+  const [wigglingNode, setWigglingNode] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
   const [positions, setPositions] = useState(() => {
     if (cached?.nodes) {
@@ -235,36 +239,46 @@ export default function ConceptMapMode({ summary }) {
 
   // Dedicated effect: runs OCR image assignment whenever mapData changes
   // and there are images but no assignments yet. Separated from applyMap so
-  // it works for both fresh generation and cached maps.
+  // Load images from IndexedDB if not already in memory (they're stripped from localStorage)
   useEffect(() => {
-    if (!mapData?.nodes?.length || !images.length) return;
-    const alreadyAssigned = mapData.nodes.some(n => n.imageIndex != null);
-    if (alreadyAssigned) return;
+    if (loadedImages.length > 0) { setImagesReady(true); return; }
+    idbLoadImages(String(summary.id))
+      .then(imgs => { if (imgs?.length) setLoadedImages(imgs); })
+      .catch(() => {})
+      .finally(() => setImagesReady(true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-assign images to nodes whenever images become available and nodes don't have them
+  useEffect(() => {
+    if (!mapData?.nodes?.length || !loadedImages.length) return;
+    const alreadyAssigned = mapData.nodes.filter(n => n.imageIndex != null && n.imageIndex >= 0).length;
+    if (alreadyAssigned >= Math.ceil(mapData.nodes.length * 0.5)) return; // already mostly assigned
     console.log('[MILA] Auto-assigning images to', mapData.nodes.length, 'nodes');
-    assignImagesToNodes(mapData.nodes, images)
+    assignImagesToNodes(mapData.nodes, loadedImages)
       .then(withImg => {
-        console.log('[MILA] Image assignment done:', withImg.map(n => n.imageIndex));
         const r = { ...mapData, nodes: withImg };
         setMapData(r);
         updateSummary(summary.id, { conceptMap: r });
       })
       .catch(e => console.error('[MILA] Image assignment failed:', e));
-  }, [mapData?.nodes?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapData?.nodes?.length, loadedImages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Generate concept map AFTER images are loaded so they're available for analysis
   useEffect(() => {
-    if (cached) return; // mapData useEffect above handles images for cached maps too
+    if (!imagesReady) return;
+    if (cached) { setLoading(false); return; }
     setLoading(true);
-    generateConceptMapAI(text, images)
+    generateConceptMapAI(text, loadedImages)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imagesReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function regenerate() {
     setLoading(true); setMapData(null); setExpanded(new Set([0]));
     setScale(0.75); setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
-    generateConceptMapAI(text, images)
+    generateConceptMapAI(text, loadedImages)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
@@ -341,6 +355,9 @@ export default function ConceptMapMode({ summary }) {
             const rect = el.getBoundingClientRect();
             const pos = positionsRef.current[nodeId];
             if (!pos) return;
+            // Wiggle feedback — signals node is ready to drag (like iPhone app jiggle)
+            setWigglingNode(nodeId);
+            setTimeout(() => setWigglingNode(null), 400);
             touchDragRef.current = {
               id: nodeId,
               ox: (touchStartClient.x - rect.left - panRef.current.x) / scaleRef.current - pos.x,
@@ -525,10 +542,10 @@ export default function ConceptMapMode({ summary }) {
   }
 
   async function reassignImages() {
-    if (!mapData || images.length === 0) return;
+    if (!mapData || loadedImages.length === 0) return;
     setReassigning(true);
     try {
-      const withImg = await assignImagesToNodes(mapData.nodes, images);
+      const withImg = await assignImagesToNodes(mapData.nodes, loadedImages);
       const updated = { ...mapData, nodes: withImg };
       setMapData(updated);
       updateSummary(summary.id, { conceptMap: updated });
@@ -540,7 +557,7 @@ export default function ConceptMapMode({ summary }) {
     if (!mapData || !text) return;
     setExpanding(true);
     try {
-      const extra = await expandConceptMapAI(text, mapData, images);
+      const extra = await expandConceptMapAI(text, mapData, loadedImages);
       if (!extra?.nodes?.length) return;
 
       // Merge new nodes into existing map
@@ -649,7 +666,7 @@ export default function ConceptMapMode({ summary }) {
           <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 32, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
           <button onClick={() => zoom(1 / 1.2)} style={toolBtnStyle} title="Alejar">−</button>
           <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
-          {images.length > 0 && (
+          {loadedImages.length > 0 && (
             <button
               onClick={reassignImages}
               disabled={reassigning}
@@ -769,7 +786,7 @@ export default function ConceptMapMode({ summary }) {
             const isExpanded = expanded.has(node.id);
             const isMain = node.type === 'main';
             const isSub = node.type === 'sub';
-            const img = node.imageIndex != null && node.imageIndex >= 0 && images[node.imageIndex] ? images[node.imageIndex] : null;
+            const img = node.imageIndex != null && node.imageIndex >= 0 && loadedImages[node.imageIndex] ? loadedImages[node.imageIndex] : null;
             const isMastered = !!masteredNodes[node.id];
 
             // Dot color: green if mastered, else default
@@ -784,7 +801,9 @@ export default function ConceptMapMode({ summary }) {
             const genState = nodeGenerating[node.id] || null;
 
             return (
-              <div key={node.id} data-node-id={node.id} style={{
+              <div key={node.id} data-node-id={node.id}
+                className={wigglingNode === node.id ? 'mila-node-wiggle' : undefined}
+                style={{
                 position: 'absolute', left: pos.x, top: pos.y, width: NODE_W,
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
                 borderRadius: 12,
@@ -951,7 +970,7 @@ export default function ConceptMapMode({ summary }) {
               <span style={{ fontSize: 11, color: 'var(--text-light)' }}>{label}</span>
             </div>
           ))}
-          {images.length > 0 && (
+          {loadedImages.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 11 }}>🖼</span>
               <span style={{ fontSize: 11, color: 'var(--text-light)' }}>Nodos con imagen del resumen</span>
