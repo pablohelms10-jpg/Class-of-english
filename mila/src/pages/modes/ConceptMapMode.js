@@ -7,8 +7,8 @@ import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
 
 const NODE_W = 270;
-const CANVAS_W = 1400;
-const CANVAS_H = 1000;
+const CANVAS_W = 3000;
+const CANVAS_H = 2000;
 
 // Mini flashcard component with its own flip state
 function MiniFlashcard({ card }) {
@@ -125,6 +125,7 @@ export default function ConceptMapMode({ summary }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [nodeGenerating, setNodeGenerating] = useState({});
   const [reassigning, setReassigning] = useState(false);
+  const [nodePanel, setNodePanel] = useState(null); // { node, tab: 'flashcards'|'questions' }
 
   const panRef = useRef(pan);
   const scaleRef = useRef(scale);
@@ -192,10 +193,12 @@ export default function ConceptMapMode({ summary }) {
 
   useEffect(() => {
     if (cached) {
-      // Always re-run OCR image assignment on load when images are present.
-      // Don't rely on cached imageIndex values — they may be wrong (from old cyclic assign).
-      if (images.length > 0 && cached.nodes) {
-        assignImagesToNodes(cached.nodes, images)
+      // Only run OCR if images have never been assigned (no imageIndex set yet).
+      // Once assigned and saved, use the cache so images appear immediately on reload.
+      const hasImages = images.length > 0;
+      const alreadyAssigned = cached.nodes && cached.nodes.some(n => n.imageIndex != null);
+      if (hasImages && !alreadyAssigned) {
+        assignImagesToNodes(cached.nodes || [], images)
           .then(withImg => { const r = { ...cached, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
           .catch(() => {});
       }
@@ -686,6 +689,23 @@ export default function ConceptMapMode({ summary }) {
                         </button>
                       </div>
 
+                      {/* View list button — shows all flashcards+questions for this node */}
+                      {(nodeCardCount > 0 || nodeQCount > 0) && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setNodePanel({ node, tab: nodeCardCount > 0 ? 'flashcards' : 'questions' }); }}
+                          style={{
+                            marginTop: 8, width: '100%', padding: '6px 10px', borderRadius: 7,
+                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.25)' : 'var(--soft-grey)'}`,
+                            background: 'transparent',
+                            color: isMain ? 'rgba(255,255,255,0.7)' : 'var(--text-light)',
+                            fontSize: 10, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                          }}
+                        >
+                          📋 Ver listado completo
+                        </button>
+                      )}
+
                       {/* Mastery button */}
                       <button
                         onClick={e => { e.stopPropagation(); toggleMastered(node.id); }}
@@ -758,21 +778,101 @@ export default function ConceptMapMode({ summary }) {
     </div>
   );
 
-  if (isFullscreen) {
+  const panelContent = nodePanel ? (() => {
+    const pNode = nodePanel.node;
+    const pTab = nodePanel.tab;
+    const pCards = flashcards.filter(c => c.conceptLabel === pNode.label);
+    const pQs = questions.filter(q => q.conceptLabel === pNode.label);
+    const items = pTab === 'flashcards' ? pCards : pQs;
     return ReactDOM.createPortal(
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 99999,
-        background: 'var(--pale-mist)',
-        display: 'flex', flexDirection: 'column',
-        padding: '10px',
-      }}>
-        {mapContent}
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 999999, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+        onClick={() => setNodePanel(null)}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ background: 'var(--ghost-white)', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 540, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 40px rgba(0,0,0,0.18)' }}
+        >
+          {/* Header */}
+          <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--whisper-grey)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-dark)' }}>{pNode.label}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                {[
+                  { id: 'flashcards', label: `Flashcards (${pCards.length})` },
+                  { id: 'questions', label: `Preguntas (${pQs.length})` },
+                ].map(t => (
+                  <button key={t.id} onClick={() => setNodePanel(p => ({ ...p, tab: t.id }))}
+                    style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer', background: pTab === t.id ? 'var(--text-dark)' : 'transparent', color: pTab === t.id ? 'white' : 'var(--text-light)', border: `1px solid ${pTab === t.id ? 'var(--text-dark)' : 'var(--soft-grey)'}` }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setNodePanel(null)} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--soft-grey)', background: 'transparent', fontSize: 15, cursor: 'pointer', color: 'var(--text-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
+          {/* List */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '12px 20px 24px' }}>
+            {items.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', fontSize: 13, color: 'var(--text-light)' }}>
+                No hay {pTab === 'flashcards' ? 'flashcards' : 'preguntas'} para este nodo.<br />
+                <span style={{ fontSize: 12 }}>Usa el botón "＋" en el nodo para generarlas.</span>
+              </div>
+            ) : pTab === 'flashcards' ? (
+              pCards.map((c, i) => (
+                <div key={c.id} style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--pale-mist)', border: '1px solid var(--whisper-grey)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 4 }}>{i + 1} / {pCards.length}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 6 }}>{c.front}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-mid)', borderTop: '1px solid var(--whisper-grey)', paddingTop: 6 }}>{c.back}</div>
+                  {c.context && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 4, fontStyle: 'italic' }}>{c.context}</div>}
+                </div>
+              ))
+            ) : (
+              pQs.map((q, i) => (
+                <div key={q.id} style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--pale-mist)', border: '1px solid var(--whisper-grey)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 4 }}>{i + 1} / {pQs.length}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 8 }}>{q.question}</div>
+                  {(q.options || []).map(opt => (
+                    <div key={opt} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, marginBottom: 4, background: opt === q.correct ? 'rgba(123,174,127,0.12)' : 'transparent', border: `1px solid ${opt === q.correct ? 'rgba(123,174,127,0.4)' : 'var(--whisper-grey)'}`, color: opt === q.correct ? '#4A8A4E' : 'var(--text-mid)' }}>
+                      {opt === q.correct ? '✓ ' : ''}{opt}
+                    </div>
+                  ))}
+                  {q.explanation && <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6, fontStyle: 'italic' }}>{q.explanation}</div>}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>,
       document.body
     );
+  })() : null;
+
+  if (isFullscreen) {
+    return (
+      <>
+        {ReactDOM.createPortal(
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'var(--pale-mist)',
+            display: 'flex', flexDirection: 'column',
+            padding: '10px',
+          }}>
+            {mapContent}
+          </div>,
+          document.body
+        )}
+        {panelContent}
+      </>
+    );
   }
 
-  return mapContent;
+  return (
+    <>
+      {mapContent}
+      {panelContent}
+    </>
+  );
 }
 
 const toolBtnStyle = {

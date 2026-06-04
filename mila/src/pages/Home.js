@@ -3,6 +3,7 @@ import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
 import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon, UploadIcon, DocumentIcon } from '../components/Icons';
+import StatsModal from '../components/StatsModal';
 
 const TAG_OPTIONS = [
   { id: 'era1', label: 'ERA 1', color: '#8B7355' },
@@ -303,6 +304,7 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(summary.title);
   const [editSubject, setEditSubject] = useState(summary.subject || '');
+  const [statsOpen, setStatsOpen] = useState(false);
 
   function handleSaveEdit(e) {
     e.stopPropagation();
@@ -439,30 +441,22 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
         </div>
       )}
 
-      {/* Edit button */}
+      {/* Stats + Edit buttons */}
       {hovered && (
-        <button
-          onClick={handleStartEdit}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 40,
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: 'var(--soft-grey)',
-            color: 'var(--text-mid)',
-            fontSize: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'var(--transition)',
-          }}
-          title="Editar"
-        >
-          ✏
-        </button>
+        <>
+          <button
+            onClick={e => { e.stopPropagation(); setStatsOpen(true); }}
+            style={{ position: 'absolute', top: 12, right: 68, width: 24, height: 24, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-mid)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'var(--transition)' }}
+            title="Estadísticas"
+          >📊</button>
+          <button
+            onClick={handleStartEdit}
+            style={{ position: 'absolute', top: 12, right: 40, width: 24, height: 24, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-mid)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'var(--transition)' }}
+            title="Editar"
+          >✏</button>
+        </>
       )}
+      {statsOpen && <StatsModal summary={summary} onClose={() => setStatsOpen(false)} />}
       <button
         onClick={e => { e.stopPropagation(); onDelete(); }}
         style={{

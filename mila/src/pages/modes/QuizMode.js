@@ -20,6 +20,8 @@ export default function QuizMode({ summary }) {
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
   const [answers, setAnswers] = useState([]);
+  // Track per-question answers so back navigation shows previous state
+  const [perQ, setPerQ] = useState({}); // { [index]: selectedOption }
 
   const images = summary?.images || [];
 
@@ -175,19 +177,31 @@ export default function QuizMode({ summary }) {
     setSelected(option);
     const correct = option === q.correct;
     if (correct) setScore(s => s + 1);
+    setPerQ(prev => ({ ...prev, [index]: option }));
     setAnswers(prev => [...prev, { question: q.question, correct, correctAnswer: q.correct }]);
   }
 
   function handleNext() {
     setSelected(null);
     if (index + 1 >= questions.length) {
-      const pct = Math.round(((score + (selected === questions[index].correct ? 1 : 0)) / questions.length) * 100);
-      const entry = { date: new Date().toISOString(), score: score + (selected === questions[index].correct ? 1 : 0), total: questions.length, pct };
+      const finalScore = score + (selected === questions[index].correct ? 1 : 0);
+      const pct = Math.round((finalScore / questions.length) * 100);
+      const entry = { date: new Date().toISOString(), score: finalScore, total: questions.length, pct };
       updateSummary(summary.id, { quizHistory: [entry, ...quizHistory].slice(0, 10) });
       setDone(true);
     } else {
-      setIndex(i => i + 1);
+      const nextIdx = index + 1;
+      setIndex(nextIdx);
+      // Restore previously given answer if navigating to an already-answered question
+      setSelected(perQ[nextIdx] ?? null);
     }
+  }
+
+  function handlePrev() {
+    if (index === 0) return;
+    const prevIdx = index - 1;
+    setIndex(prevIdx);
+    setSelected(perQ[prevIdx] ?? null);
   }
 
   return (
@@ -255,13 +269,20 @@ export default function QuizMode({ summary }) {
         </div>
       )}
 
-      {selected !== null && (
-        <div style={{ textAlign: 'right' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button
+          onClick={handlePrev}
+          disabled={index === 0}
+          style={{ padding: '12px 20px', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--soft-grey)', color: 'var(--text-mid)', fontSize: 14, opacity: index === 0 ? 0.35 : 1, cursor: index === 0 ? 'default' : 'pointer', background: 'transparent' }}
+        >
+          ← Anterior
+        </button>
+        {selected !== null && (
           <button onClick={handleNext} style={{ padding: '13px 28px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))', color: 'white', fontSize: 14, fontWeight: 500 }}>
             {index + 1 >= questions.length ? 'Ver resultados →' : 'Siguiente →'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

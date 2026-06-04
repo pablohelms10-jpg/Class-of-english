@@ -5,12 +5,14 @@ import QuizMode from './modes/QuizMode';
 import ConceptMapMode from './modes/ConceptMapMode';
 import ImagesMode from './modes/ImagesMode'; // eslint-disable-line no-unused-vars
 import ContentEditorPanel from '../components/ContentEditorPanel';
+import StatsModal from '../components/StatsModal';
 import { FlashcardIcon, QuizIcon } from '../components/Icons';
 
 export default function SummaryDetail() {
   const { activeSummary } = useMila();
   const [editorOpen, setEditorOpen] = useState(false);
   const [overlay, setOverlay] = useState(null); // 'flashcards' | 'quiz' | null
+  const [statsOpen, setStatsOpen] = useState(false);
 
   useEffect(() => {
     if (overlay) {
@@ -62,6 +64,19 @@ export default function SummaryDetail() {
             style={iconBtnStyle(false)}
           >
             <QuizIcon size={16} color="var(--text-dark)" />
+          </button>
+
+          {/* Stats button */}
+          <button
+            onClick={() => setStatsOpen(true)}
+            title="Estadísticas de aprendizaje"
+            style={iconBtnStyle(false)}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <rect x="1" y="8" width="3" height="6" rx="1" fill="currentColor" opacity="0.5"/>
+              <rect x="6" y="4" width="3" height="10" rx="1" fill="currentColor" opacity="0.75"/>
+              <rect x="11" y="1" width="3" height="13" rx="1" fill="currentColor"/>
+            </svg>
           </button>
 
           {/* Edit button */}
@@ -137,6 +152,10 @@ export default function SummaryDetail() {
 
       {editorOpen && (
         <ContentEditorPanel open={true} onClose={() => setEditorOpen(false)} summary={activeSummary} />
+      )}
+
+      {statsOpen && (
+        <StatsModal summary={activeSummary} onClose={() => setStatsOpen(false)} />
       )}
     </div>
   );
