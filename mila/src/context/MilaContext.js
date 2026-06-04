@@ -24,6 +24,7 @@ export function MilaProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(!!supabase);
   const [authError, setAuthError] = useState('');
+  const [syncError, setSyncError] = useState(''); // '' | 'error' | 'ok'
 
   // Per-summary debounce timers
   const upsertTimers = useRef({});
@@ -135,20 +136,32 @@ export function MilaProvider({ children }) {
     }
   }
 
+  // ── Upsert a summary to Supabase with retry ───────────────────────────
+  async function doUpsert(id, userId, payload) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { error } = await supabase
+          .from('summaries')
+          .upsert({ id: String(id), user_id: userId, data: payload }, { onConflict: 'id' });
+        if (!error) { setSyncError('ok'); return true; }
+        console.error(`[MILA] Supabase upsert error (attempt ${attempt + 1}):`, error);
+        setSyncError('error');
+      } catch (e) {
+        console.error(`[MILA] Supabase upsert exception (attempt ${attempt + 1}):`, e);
+        setSyncError('error');
+      }
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+    return false;
+  }
+
   // ── Upsert one summary to Supabase (debounced 2 s, no images) ─────────
   function scheduleUpsert(summary, userId) {
     if (!supabase || !userId) return;
     const id = String(summary.id);
     clearTimeout(upsertTimers.current[id]);
-    upsertTimers.current[id] = setTimeout(async () => {
-      try {
-        const { error } = await supabase
-          .from('summaries')
-          .upsert({ id, user_id: userId, data: stripImages(summary) }, { onConflict: 'id' });
-        if (error) console.error('[MILA] Supabase upsert error:', error);
-      } catch (e) {
-        console.error('[MILA] Supabase upsert exception:', e);
-      }
+    upsertTimers.current[id] = setTimeout(() => {
+      doUpsert(id, userId, stripImages(summary));
     }, 2000);
   }
 
@@ -162,10 +175,7 @@ export function MilaProvider({ children }) {
     setSummaries(prev => [newSummary, ...prev]);
     // Immediate cloud upsert (without images)
     if (supabase && user) {
-      supabase.from('summaries')
-        .upsert({ id: String(newSummary.id), user_id: user.id, data: stripImages(newSummary) }, { onConflict: 'id' })
-        .then(({ error }) => { if (error) console.error('[MILA] Supabase insert error:', error); })
-        .catch(e => console.error('[MILA] Supabase insert exception:', e));
+      doUpsert(newSummary.id, user.id, stripImages(newSummary));
     }
     return newSummary;
   }
@@ -229,6 +239,7 @@ export function MilaProvider({ children }) {
       darkMode, toggleDark,
       user, authLoading, authError, setAuthError,
       signIn, signUp, signOut,
+      syncError,
       supabaseEnabled: !!supabase,
     }}>
       {children}

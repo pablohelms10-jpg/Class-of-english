@@ -5,7 +5,7 @@ import DarkModeToggle from './DarkModeToggle';
 import LibraryPanel from './LibraryPanel';
 
 export default function Layout({ children }) {
-  const { activeSummary, setActiveSummary, setActiveMode, darkMode, toggleDark, user, signOut, supabaseEnabled } = useMila();
+  const { activeSummary, setActiveSummary, setActiveMode, darkMode, toggleDark, user, signOut, supabaseEnabled, syncError } = useMila();
   const [libraryOpen, setLibraryOpen] = useState(false);
 
   return (
@@ -69,6 +69,16 @@ export default function Layout({ children }) {
               <rect x="11" y="2" width="4" height="12" rx="1" fill="currentColor"/>
             </svg>
           </button>
+          {supabaseEnabled && user && syncError && (
+            <div title={syncError === 'error' ? 'Error al sincronizar con la nube' : 'Sincronizado con la nube'} style={{
+              fontSize: 11, padding: '3px 8px', borderRadius: 8,
+              background: syncError === 'error' ? 'rgba(180,60,60,0.12)' : 'rgba(60,160,80,0.12)',
+              color: syncError === 'error' ? '#a33' : '#2a7',
+              border: `1px solid ${syncError === 'error' ? 'rgba(180,60,60,0.3)' : 'rgba(60,160,80,0.3)'}`,
+            }}>
+              {syncError === 'error' ? '⚠ Sin nube' : '✓ Nube'}
+            </div>
+          )}
           <DarkModeToggle dark={darkMode} onToggle={toggleDark} />
           {supabaseEnabled && user && (
             <button
