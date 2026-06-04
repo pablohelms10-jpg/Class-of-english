@@ -393,11 +393,24 @@ export async function assignImagesToNodes(nodes, images) {
   return nodes.map((n, i) => ({ ...n, imageIndex: imageMatches[i] ?? null }));
 }
 
+function cleanTextForMap(text) {
+  return text
+    // Remove "CARA N" / "CARA N:" structural page labels
+    .replace(/\bCARA\s+\d+\s*:?/gi, ' ')
+    // Remove bare page numbers like "Página 3" or "PAGE 2"
+    .replace(/\b(P[ÁA]GINA|PAGE)\s+\d+\b/gi, ' ')
+    // Collapse multiple spaces/newlines
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/ {3,}/g, ' ')
+    .trim();
+}
+
 export async function generateConceptMapAI(text) {
+  const cleanText = cleanTextForMap(text);
   const prompt = `Eres un profesor de medicina. Analiza el siguiente resumen y crea un mapa conceptual detallado y organizado sobre los temas REALES del texto.
 
 RESUMEN:
-${smartSample(text)}
+${smartSample(cleanText)}
 
 Responde SOLO con JSON válido, sin texto antes ni después. Genera exactamente 10-12 nodos con títulos ESPECÍFICOS del contenido (no genéricos):
 {

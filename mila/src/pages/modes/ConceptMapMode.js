@@ -168,42 +168,43 @@ export default function ConceptMapMode({ summary }) {
   }
 
   function applyMap(data) {
-    // Don't pre-assign images with quickAssignImages (cyclic, wrong).
-    // Show nodes without images first, then OCR matching fills them in.
     const base = { ...data };
     setMapData(base);
     applyNodes(base.nodes);
     updateSummary(summary.id, { conceptMap: base });
-    if (images.length > 0) {
-      assignImagesToNodes(base.nodes, images)
-        .then(withImg => { const r = { ...base, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
-        .catch(() => {});
-    }
+    // Image assignment is handled by the mapData useEffect below
     // Auto-generate tagged flashcards + questions if not yet done
     const hasTagged = (summary.flashcards || []).some(f => f.conceptLabel);
     if (!hasTagged && text) {
-      generateFlashcardsAI(text, [], images, nodes)
+      generateFlashcardsAI(text, [], images, data.nodes)
         .then(({ cards }) => updateSummary(summary.id, { flashcards: cards }))
-        .catch(() => {});
-      generateQuestionsAI(text, [], images, nodes)
+        .catch(e => console.warn('[MILA] flashcard gen failed:', e));
+      generateQuestionsAI(text, [], images, data.nodes)
         .then(({ questions: qs }) => updateSummary(summary.id, { questions: qs }))
-        .catch(() => {});
+        .catch(e => console.warn('[MILA] question gen failed:', e));
     }
   }
 
+  // Dedicated effect: runs OCR image assignment whenever mapData changes
+  // and there are images but no assignments yet. Separated from applyMap so
+  // it works for both fresh generation and cached maps.
   useEffect(() => {
-    if (cached) {
-      // Only run OCR if images have never been assigned (no imageIndex set yet).
-      // Once assigned and saved, use the cache so images appear immediately on reload.
-      const hasImages = images.length > 0;
-      const alreadyAssigned = cached.nodes && cached.nodes.some(n => n.imageIndex != null);
-      if (hasImages && !alreadyAssigned) {
-        assignImagesToNodes(cached.nodes || [], images)
-          .then(withImg => { const r = { ...cached, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
-          .catch(() => {});
-      }
-      return;
-    }
+    if (!mapData?.nodes?.length || !images.length) return;
+    const alreadyAssigned = mapData.nodes.some(n => n.imageIndex != null);
+    if (alreadyAssigned) return;
+    console.log('[MILA] Auto-assigning images to', mapData.nodes.length, 'nodes');
+    assignImagesToNodes(mapData.nodes, images)
+      .then(withImg => {
+        console.log('[MILA] Image assignment done:', withImg.map(n => n.imageIndex));
+        const r = { ...mapData, nodes: withImg };
+        setMapData(r);
+        updateSummary(summary.id, { conceptMap: r });
+      })
+      .catch(e => console.error('[MILA] Image assignment failed:', e));
+  }, [mapData?.nodes?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (cached) return; // mapData useEffect above handles images for cached maps too
     setLoading(true);
     generateConceptMapAI(text)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
