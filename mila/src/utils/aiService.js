@@ -429,9 +429,5 @@ Reglas estrictas:
   const raw = await askClaude(prompt, [], 4000);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-
-  const raw = await askClaude(prompt, [], 4000);
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Respuesta inválida de la IA');
   return JSON.parse(match[0]);
 }
