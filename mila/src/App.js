@@ -4,6 +4,7 @@ import { MilaProvider, useMila } from './context/MilaContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import SummaryDetail from './pages/SummaryDetail';
+import AuthGate from './components/AuthGate';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -62,7 +63,9 @@ function AppContent() {
 export default function App() {
   return (
     <MilaProvider>
-      <AppContent />
+      <AuthGate>
+        <AppContent />
+      </AuthGate>
     </MilaProvider>
   );
 }

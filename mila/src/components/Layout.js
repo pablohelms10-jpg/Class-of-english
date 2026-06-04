@@ -5,7 +5,7 @@ import DarkModeToggle from './DarkModeToggle';
 import LibraryPanel from './LibraryPanel';
 
 export default function Layout({ children }) {
-  const { activeSummary, setActiveSummary, setActiveMode, darkMode, toggleDark } = useMila();
+  const { activeSummary, setActiveSummary, setActiveMode, darkMode, toggleDark, user, signOut, supabaseEnabled } = useMila();
   const [libraryOpen, setLibraryOpen] = useState(false);
 
   return (
@@ -70,6 +70,23 @@ export default function Layout({ children }) {
             </svg>
           </button>
           <DarkModeToggle dark={darkMode} onToggle={toggleDark} />
+          {supabaseEnabled && user && (
+            <button
+              onClick={signOut}
+              title={`Cerrar sesión (${user.email})`}
+              style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'transparent',
+                border: '1.5px solid var(--soft-grey)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: 'var(--text-light)', fontSize: 14,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--soft-grey)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              ↪
+            </button>
+          )}
         </div>
       </header>
 
