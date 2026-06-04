@@ -23,6 +23,102 @@ async function compressImage(dataUrl, maxPx = 480) {
   });
 }
 
+// OCR pipeline for image-only PDFs.
+// Sends page images in batches of 4 and extracts all visible text.
+// Returns a single combined string ready to feed into concept map generation.
+export async function ocrImagePages(images, onProgress) {
+  const pages = images.slice(0, 20); // cap at 20 pages
+  if (pages.length === 0) return '';
+
+  const BATCH = 4;
+  const allText = [];
+
+  for (let i = 0; i < pages.length; i += BATCH) {
+    const batch = pages.slice(i, i + BATCH);
+    const startPage = i + 1;
+
+    // Build request content with higher-res images for better OCR accuracy
+    const content = [];
+    for (const img of batch) {
+      try {
+        const compressed = await compressImageHighRes(img.src);
+        if (!compressed) continue;
+        const data = compressed.replace(/^data:[^;]+;base64,/, '');
+        if (data.length > 4_000_000) continue;
+        content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } });
+      } catch { /* skip */ }
+    }
+
+    const endPage = Math.min(startPage + batch.length - 1, pages.length);
+    const sections = Array.from({ length: batch.length }, (_, j) =>
+      `=== PÁGINA ${startPage + j} ===\n(transcribí aquí todo el texto de la imagen ${j + 1})`
+    ).join('\n\n');
+
+    content.push({
+      type: 'text',
+      text: `Estas son ${batch.length} página(s) de un PDF (páginas ${startPage} a ${endPage}).
+
+Transcribí TODO el texto escrito que ves en CADA imagen, en el mismo orden en que aparece. Incluí títulos, subtítulos, párrafos, listas, etiquetas de flechas y cualquier texto visible. NO describas dibujos ni ilustraciones — solo copiá el texto.
+
+Respondé con este formato exacto, una sección por imagen:
+
+${sections}
+
+Si una página no tiene texto legible, escribí "(sin texto)" en esa sección.`,
+    });
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 4000,
+          messages: [{ role: 'user', content }],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        allText.push(data.content[0].text);
+      }
+    } catch (e) {
+      console.warn('[MILA OCR] Error en lote', startPage, e);
+    }
+
+    if (onProgress) onProgress(Math.min(i + BATCH, pages.length), pages.length);
+  }
+
+  // Strip the section headers and join into clean running text
+  const raw = allText.join('\n\n');
+  return raw
+    .replace(/===\s*PÁGINA\s+\d+\s*===/gi, '\n\n')
+    .replace(/\(sin texto\)/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function compressImageHighRes(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1000; // higher res for text recognition
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
 // Pick images spread evenly across the array
 function spreadImages(images, count = 6) {
   if (!images || images.length === 0) return [];

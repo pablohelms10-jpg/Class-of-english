@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
+import { ocrImagePages } from '../utils/aiService';
 import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon, UploadIcon, DocumentIcon } from '../components/Icons';
 import StatsModal from '../components/StatsModal';
 
@@ -60,11 +61,33 @@ export default function Home() {
           const result = await extractFromPDF(file, (current, total) => {
             setPdfProgress({ current, total });
           });
-          text += result.text + '\n\n';
           images.push(...result.images);
           if (result.truncated) {
             setLoadingMsg(`⚠️ PDF muy largo — se procesaron las primeras ${MAX_PDF_PAGES} de ${result.totalPages} páginas`);
             await new Promise(r => setTimeout(r, 2500));
+          }
+
+          // Detect image-only PDF: fewer than 20 words per page means pdfjs
+          // found almost no embedded text — the content lives in the images.
+          const pdfWords = result.text.trim().split(/\s+/).filter(Boolean).length;
+          const pageCount = result.images.length || 1;
+          const isImageOnly = pdfWords < pageCount * 20 && result.images.length > 0;
+
+          if (isImageOnly) {
+            setLoadingMsg(`PDF con solo imágenes — leyendo texto con OCR (${result.images.length} páginas)…`);
+            setPdfProgress({ current: 0, total: result.images.length });
+            try {
+              const ocrText = await ocrImagePages(result.images, (current, total) => {
+                setPdfProgress({ current, total });
+                setLoadingMsg(`OCR: página ${current} de ${total}…`);
+              });
+              text += ocrText + '\n\n';
+            } catch (e) {
+              console.warn('[MILA] OCR falló, usando texto original:', e);
+              text += result.text + '\n\n';
+            }
+          } else {
+            text += result.text + '\n\n';
           }
           setPdfProgress(null);
         } else if (file.type.startsWith('image/')) {
