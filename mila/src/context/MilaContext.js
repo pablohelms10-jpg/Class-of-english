@@ -61,6 +61,33 @@ export function MilaProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Images stay in localStorage only (too large for Supabase JSONB) ───
+  function saveImages(summaryId, images) {
+    if (!images) return;
+    try { localStorage.setItem(`mila_images_${summaryId}`, JSON.stringify(images)); } catch { /* quota */ }
+  }
+
+  function loadImages(summaryId) {
+    try {
+      const v = localStorage.getItem(`mila_images_${summaryId}`);
+      return v ? JSON.parse(v) : undefined;
+    } catch { return undefined; }
+  }
+
+  function removeImages(summaryId) {
+    try { localStorage.removeItem(`mila_images_${summaryId}`); } catch { /* ignore */ }
+  }
+
+  function stripImages(summary) {
+    const { images, ...rest } = summary; // eslint-disable-line no-unused-vars
+    return rest;
+  }
+
+  function mergeImages(summary) {
+    const images = loadImages(summary.id);
+    return images ? { ...summary, images } : summary;
+  }
+
   // ── Load summaries from Supabase ───────────────────────────────────────
   async function loadCloudSummaries(userId) {
     try {
@@ -73,14 +100,18 @@ export function MilaProvider({ children }) {
       if (error) { console.error('[MILA] Supabase load error:', error); return; }
 
       if (data && data.length > 0) {
-        const cloud = data.map(row => row.data);
+        // Merge cloud metadata with locally-stored images
+        const cloud = data.map(row => mergeImages(row.data));
         setSummaries(cloud);
       } else {
-        // First login: migrate local summaries to cloud
+        // First login: migrate local summaries to cloud (without images)
         const local = loadFromStorage('mila_summaries', []);
         if (local.length > 0) {
-          const rows = local.map(s => ({ id: String(s.id), user_id: userId, data: s }));
-          await supabase.from('summaries').upsert(rows, { onConflict: 'id' });
+          // Save images locally keyed by id, then upsert stripped data
+          local.forEach(s => { if (s.images) saveImages(s.id, s.images); });
+          const rows = local.map(s => ({ id: String(s.id), user_id: userId, data: stripImages(s) }));
+          const { error: upsertErr } = await supabase.from('summaries').upsert(rows, { onConflict: 'id' });
+          if (upsertErr) console.error('[MILA] Migration upsert error:', upsertErr);
         }
       }
     } catch (e) {
@@ -88,7 +119,7 @@ export function MilaProvider({ children }) {
     }
   }
 
-  // ── Upsert one summary to Supabase (debounced 2 s) ────────────────────
+  // ── Upsert one summary to Supabase (debounced 2 s, no images) ─────────
   function scheduleUpsert(summary, userId) {
     if (!supabase || !userId) return;
     const id = String(summary.id);
@@ -97,7 +128,7 @@ export function MilaProvider({ children }) {
       try {
         const { error } = await supabase
           .from('summaries')
-          .upsert({ id, user_id: userId, data: summary }, { onConflict: 'id' });
+          .upsert({ id, user_id: userId, data: stripImages(summary) }, { onConflict: 'id' });
         if (error) console.error('[MILA] Supabase upsert error:', error);
       } catch (e) {
         console.error('[MILA] Supabase upsert exception:', e);
@@ -110,11 +141,13 @@ export function MilaProvider({ children }) {
 
   function addSummary(summary) {
     const newSummary = { id: Date.now(), createdAt: new Date(), ...summary };
+    // Persist images locally (too large for Supabase)
+    if (newSummary.images) saveImages(newSummary.id, newSummary.images);
     setSummaries(prev => [newSummary, ...prev]);
-    // Immediate cloud upsert
+    // Immediate cloud upsert (without images)
     if (supabase && user) {
       supabase.from('summaries')
-        .upsert({ id: String(newSummary.id), user_id: user.id, data: newSummary }, { onConflict: 'id' })
+        .upsert({ id: String(newSummary.id), user_id: user.id, data: stripImages(newSummary) }, { onConflict: 'id' })
         .then(({ error }) => { if (error) console.error('[MILA] Supabase insert error:', error); })
         .catch(e => console.error('[MILA] Supabase insert exception:', e));
     }
@@ -135,6 +168,7 @@ export function MilaProvider({ children }) {
   function deleteSummary(id) {
     setSummaries(prev => prev.filter(s => s.id !== id));
     if (activeSummary?.id === id) setActiveSummary(null);
+    removeImages(id);
     if (supabase && user) {
       supabase.from('summaries').delete().eq('id', String(id))
         .then(({ error }) => { if (error) console.error('[MILA] Supabase delete error:', error); })
