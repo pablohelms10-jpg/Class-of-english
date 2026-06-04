@@ -167,18 +167,15 @@ export default function ConceptMapMode({ summary }) {
   }
 
   function applyMap(data) {
-    let nodes = data.nodes;
+    // Don't pre-assign images with quickAssignImages (cyclic, wrong).
+    // Show nodes without images first, then OCR matching fills them in.
+    const base = { ...data };
+    setMapData(base);
+    applyNodes(base.nodes);
+    updateSummary(summary.id, { conceptMap: base });
     if (images.length > 0) {
-      const qi = quickAssignImages(nodes.length, images);
-      nodes = nodes.map((n, i) => ({ ...n, imageIndex: qi[i] ?? null }));
-    }
-    const quick = { ...data, nodes };
-    setMapData(quick);
-    applyNodes(quick.nodes);
-    updateSummary(summary.id, { conceptMap: quick });
-    if (images.length > 0) {
-      assignImagesToNodes(nodes, images)
-        .then(withImg => { const r = { ...quick, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
+      assignImagesToNodes(base.nodes, images)
+        .then(withImg => { const r = { ...base, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
         .catch(() => {});
     }
     // Auto-generate tagged flashcards + questions if not yet done
@@ -195,14 +192,11 @@ export default function ConceptMapMode({ summary }) {
 
   useEffect(() => {
     if (cached) {
-      if (images.length > 0 && cached.nodes && !cached.nodes.some(n => n.imageIndex != null)) {
-        const qi = quickAssignImages(cached.nodes.length, images);
-        const upgraded = { ...cached, nodes: cached.nodes.map((n, i) => ({ ...n, imageIndex: qi[i] ?? null })) };
-        setMapData(upgraded);
-        applyNodes(upgraded.nodes);
-        updateSummary(summary.id, { conceptMap: upgraded });
-        assignImagesToNodes(upgraded.nodes, images)
-          .then(withImg => { const r = { ...upgraded, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
+      // Always re-run OCR image assignment on load when images are present.
+      // Don't rely on cached imageIndex values — they may be wrong (from old cyclic assign).
+      if (images.length > 0 && cached.nodes) {
+        assignImagesToNodes(cached.nodes, images)
+          .then(withImg => { const r = { ...cached, nodes: withImg }; setMapData(r); updateSummary(summary.id, { conceptMap: r }); })
           .catch(() => {});
       }
       return;

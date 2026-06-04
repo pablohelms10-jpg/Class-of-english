@@ -86,9 +86,9 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
-  // Use ALL images up to 20, not just 12 spread evenly.
-  // Spreading causes many labeled slides to be skipped entirely.
-  const selected = spreadImages(images, Math.min(images.length, 20));
+  // Cap at 12 images. 20 images + OCR text exceeds the 2000-token response
+  // budget and causes JSON truncation. 12 is reliable and covers most PDFs.
+  const selected = spreadImages(images, Math.min(images.length, 12));
 
   console.group('[MILA matchImages] Stage 1 — OCR');
   console.log('Imágenes enviadas a Claude:', selected.length);
@@ -99,82 +99,87 @@ async function matchImages(topics, images) {
   const ocrPrompt = `Sos un sistema OCR. Para cada imagen, transcribí TODO el texto visible: títulos, subtítulos, etiquetas, nombres anatómicos, leyendas, texto de flechas.
 No hagas ninguna asignación ni interpretación. Solo copiá el texto que ves.
 
-Respondé con JSON exactamente así (${selected.length} objetos, uno por imagen):
+Respondé con JSON exactamente así (${selected.length} objetos, uno por imagen, en orden):
 {"ocr": [
   {"idx": 0, "text": "todo el texto de la imagen 0"},
   {"idx": 1, "text": "todo el texto de la imagen 1"}
 ]}
 
 Si una imagen no tiene texto legible, usá "" para ese campo.
-Incluí el array completo con los ${selected.length} índices.`;
+Incluí los ${selected.length} objetos completos.`;
 
   let ocrResults = [];
   try {
-    const raw = await askClaude(ocrPrompt, selected, 2000);
+    // Use 4000 tokens — 12 images × ~3 lines of OCR each fits comfortably
+    const raw = await askClaude(ocrPrompt, selected, 4000);
     console.log('[MILA matchImages] Respuesta OCR cruda:\n', raw);
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/s) || raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      ocrResults = parsed.ocr || [];
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        ocrResults = parsed.ocr || [];
+      } catch {
+        // JSON may be truncated — extract any complete {"idx":N,"text":"..."} objects
+        const entries = [...raw.matchAll(/\{\s*"idx"\s*:\s*(\d+)\s*,\s*"text"\s*:\s*"([^"]*)"/g)];
+        ocrResults = entries.map(m => ({ idx: parseInt(m[1]), text: m[2] }));
+        console.warn('[MILA matchImages] JSON truncado, recuperados', ocrResults.length, 'de', selected.length, 'entradas');
+      }
     }
   } catch (err) {
     console.error('[MILA matchImages] Error en Stage 1 (OCR):', err);
     return topics.map(() => null);
   }
 
+  if (ocrResults.length === 0) {
+    console.error('[MILA matchImages] OCR devolvió 0 entradas — abortando');
+    return topics.map(() => null);
+  }
+
   // Stage 2: deterministic JavaScript matching
-  // For each image, check which topics are mentioned in its OCR text
   console.group('[MILA matchImages] Stage 2 — Matching determinístico');
 
-  // Build map: imageIdx → OCR text
+  // Build map: imageIdx → OCR text (normalise accents + lowercase)
+  function normalise(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
   const ocrMap = {};
-  ocrResults.forEach(r => { ocrMap[r.idx] = (r.text || '').toLowerCase(); });
+  ocrResults.forEach(r => { ocrMap[r.idx] = normalise(r.text); });
 
-  // Log OCR per image
   selected.forEach((img, si) => {
     const ocr = ocrMap[si] || '(sin texto)';
     console.log(`Imagen #${si} (origIdx ${img._origIdx}): "${ocr.slice(0, 120)}"`);
   });
 
-  // Score: for each (image, topic) pair, compute match strength
-  // Score 3: OCR contains the full topic label (strongest)
-  // Score 2: topic label contains most words from OCR title
+  // Score: how well does an image's OCR match a topic label?
+  // Score 3: OCR contains the full topic label (exact)
+  // Score 2: all significant words of topic (>3 chars) appear in OCR
+  // Score 1: majority of significant words appear in OCR
   // Score 0: no match
   function score(ocrText, topicLabel) {
-    const ocr = ocrText.toLowerCase();
-    const topic = topicLabel.toLowerCase().trim();
+    const ocr = normalise(ocrText);
+    const topic = normalise(topicLabel.trim());
     if (!ocr || !topic) return 0;
     if (ocr.includes(topic)) return 3;
-    // Check if all significant words of topic appear in OCR
     const words = topic.split(/\s+/).filter(w => w.length > 3);
-    if (words.length > 0 && words.every(w => ocr.includes(w))) return 2;
+    if (words.length === 0) return ocr.includes(topic) ? 3 : 0;
+    const matched = words.filter(w => ocr.includes(w));
+    if (matched.length === words.length) return 2;
+    if (matched.length >= Math.ceil(words.length * 0.6)) return 1;
     return 0;
   }
 
-  // For each image, find the best-matching topic
-  // imgBestTopic[si] = { topicIdx, score }
-  const imgBestTopic = selected.map((_, si) => {
-    const ocr = ocrMap[si] || '';
-    let best = { topicIdx: null, score: 0 };
-    topics.forEach((topic, ti) => {
-      const s = score(ocr, topic);
-      if (s > best.score) best = { topicIdx: ti, score: s };
-    });
-    return best;
-  });
-
-  // Assign: each topic gets the highest-scoring image that matches it,
-  // and each image can only be used once (greedy by score, highest first)
+  // Build candidates: (image, topic, score) for every pair with score > 0
   const candidates = [];
   selected.forEach((img, si) => {
-    const { topicIdx, score: s } = imgBestTopic[si];
-    if (topicIdx !== null && s > 0) {
-      candidates.push({ si, origIdx: img._origIdx, topicIdx, score: s });
-    }
+    const ocr = ocrMap[si] || '';
+    topics.forEach((topic, ti) => {
+      const s = score(ocr, topic);
+      if (s > 0) candidates.push({ si, origIdx: img._origIdx, topicIdx: ti, score: s });
+    });
   });
 
-  // Sort by score desc so higher-confidence matches claim images first
-  candidates.sort((a, b) => b.score - a.score);
+  // Greedy assignment: highest score first, each image and topic used once
+  candidates.sort((a, b) => b.score - a.score || a.si - b.si);
 
   const usedImages = new Set();
   const usedTopics = new Set();
