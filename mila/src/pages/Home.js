@@ -240,7 +240,7 @@ export default function Home() {
           )}
         </div>
 
-        <input ref={fileRef} type="file" hidden multiple accept=".txt,.md,.pdf,image/jpeg,image/png,image/webp" onChange={e => processFiles([...e.target.files])} />
+        <input ref={fileRef} type="file" multiple accept=".txt,.md,.pdf,image/jpeg,image/png,image/webp" onChange={e => processFiles([...e.target.files])} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
 
         {error && (
           <div style={{ marginTop: 12, padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'rgba(176,168,164,0.15)', border: '1px solid var(--feather-touch)', fontSize: 13, color: 'var(--ash-plum)' }}>
