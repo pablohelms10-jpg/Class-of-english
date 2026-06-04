@@ -381,25 +381,58 @@ export default function Home() {
 
 function HeroSection() {
   const { darkMode } = useMila();
+
+  const line1 = 'Sube tu apunte y estudia a tu manera.';
+  const line2 = 'Mila lo convierte en mapas, flashcards y preguntas para ti.';
+
   return (
     <div style={{ textAlign: 'center', padding: '48px 0 56px', animation: 'fadeUp 0.6s ease both' }}>
+      <style>{`
+        @keyframes letterFadeUp {
+          0%   { opacity: 0; transform: translateY(14px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes floatLetter {
+          0%, 100% { transform: translateY(0px); }
+          50%       { transform: translateY(-3px); }
+        }
+      `}</style>
+
       <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9 }}>
         <MilaLogo size={64} dark={darkMode} />
       </div>
-      <h1 style={{ fontSize: 40, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-1px', marginBottom: 12 }}>
+      <h1 style={{ fontSize: 40, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-1px', marginBottom: 24 }}>
         Hola, soy <span style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>MILA</span>
       </h1>
-      <p style={{ fontSize: 16, color: 'var(--text-mid)', lineHeight: 1.7, maxWidth: 420, margin: '0 auto 40px' }}>
-        Tu asistente de estudio personalizado. Sube tu resumen y lo transformo en flashcards, preguntas, mapas conceptuales y más.
-      </p>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
-        {['Solo tu contenido', 'Extrae imágenes', 'Múltiples formatos'].map(f => (
-          <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--driftwood)' }} />
-            <span style={{ fontSize: 13, color: 'var(--text-mid)' }}>{f}</span>
-          </div>
-        ))}
+
+      {/* Animated text lines */}
+      <div style={{ maxWidth: 500, margin: '0 auto 40px', lineHeight: 1.8 }}>
+        <AnimatedLine text={line1} baseDelay={0} fontSize={17} bold />
+        <AnimatedLine text={line2} baseDelay={line1.length * 18} fontSize={15} />
       </div>
+    </div>
+  );
+}
+
+function AnimatedLine({ text, baseDelay, fontSize, bold }) {
+  return (
+    <p style={{ margin: '0 0 6px', fontSize, fontWeight: bold ? 500 : 400, color: bold ? 'var(--text-dark)' : 'var(--text-mid)', display: 'block' }}>
+      {text.split('').map((char, i) => (
+        <span
+          key={i}
+          style={{
+            display: 'inline-block',
+            whiteSpace: char === ' ' ? 'pre' : 'normal',
+            animation: `letterFadeUp 0.35s ease both, floatLetter ${2.2 + (i % 5) * 0.15}s ease-in-out ${1.5 + i * 0.04}s infinite`,
+            animationDelay: `${baseDelay + i * 18}ms, ${1500 + baseDelay + i * 18}ms`,
+          }}
+        >
+          {char}
+        </span>
+      ))}
+    </p>
+  );
+}
     </div>
   );
 }
