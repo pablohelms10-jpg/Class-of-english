@@ -433,9 +433,6 @@ function AnimatedLine({ text, baseDelay, fontSize, bold }) {
     </p>
   );
 }
-    </div>
-  );
-}
 
 function SummaryCard({ summary, onOpen, onOpenMode, onDelete, selectMode, selected }) {
   const { updateSummary } = useMila();
