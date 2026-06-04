@@ -420,9 +420,15 @@ Reglas estrictas:
 - 1 nodo "main" (tema central) en x≈600, y≈80
 - 3-5 nodos "sub" (subtemas principales) distribuidos en segunda fila
 - 5-7 nodos "detail" (conceptos específicos) en tercera fila
-- Los "label" deben ser términos MÉDICOS REALES del texto, no genéricos
+- Los "label" deben ser términos MÉDICOS O TEMÁTICOS REALES extraídos del contenido
 - Distribuye en espacio 1200x900px con separación clara entre nodos
-- NUNCA uses nombres como "Concepto 1", "Subtema A" o similares`;
+- NUNCA uses como label: "Concepto 1", "Subtema A", "CARA 1", "CARA 2", "Página N", números de página, ni ninguna etiqueta estructural del documento
+- Si el texto contiene preguntas de examen, extrae los TEMAS que evalúan, no los números de pregunta ni etiquetas de cara/página
+- Los labels deben responder: ¿sobre qué TEMA trata este nodo?`;
+
+  const raw = await askClaude(prompt, [], 4000);
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Respuesta inválida de la IA');
 
   const raw = await askClaude(prompt, [], 4000);
   const match = raw.match(/\{[\s\S]*\}/);
