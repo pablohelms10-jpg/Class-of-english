@@ -244,7 +244,7 @@ export default function ConceptMapMode({ summary }) {
   useEffect(() => {
     if (cached) return; // mapData useEffect above handles images for cached maps too
     setLoading(true);
-    generateConceptMapAI(text)
+    generateConceptMapAI(text, images)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
@@ -254,7 +254,7 @@ export default function ConceptMapMode({ summary }) {
     setLoading(true); setMapData(null); setExpanded(new Set([0]));
     setScale(0.75); setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
-    generateConceptMapAI(text)
+    generateConceptMapAI(text, images)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
       .finally(() => setLoading(false));
@@ -530,7 +530,7 @@ export default function ConceptMapMode({ summary }) {
     if (!mapData || !text) return;
     setExpanding(true);
     try {
-      const extra = await expandConceptMapAI(text, mapData);
+      const extra = await expandConceptMapAI(text, mapData, images);
       if (!extra?.nodes?.length) return;
 
       // Merge new nodes into existing map

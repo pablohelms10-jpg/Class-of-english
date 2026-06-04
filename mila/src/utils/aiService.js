@@ -518,41 +518,71 @@ function cleanTextForMap(text) {
     .trim();
 }
 
-export async function generateConceptMapAI(text) {
+export async function generateConceptMapAI(text, images = []) {
   const cleanText = cleanTextForMap(text);
-  const prompt = `Eres un asistente que organiza texto en un mapa conceptual. Tu única tarea es IDENTIFICAR qué partes del texto pertenecen a cada concepto y COPIARLAS TEXTUALMENTE, sin cambiar ni una sola palabra.
+  const hasImages = images && images.length > 0;
+  const selectedImages = hasImages ? spreadImages(images, 8) : [];
 
-RESUMEN ORIGINAL:
-${smartSample(cleanText)}
+  const textSection = cleanText.trim()
+    ? `\nTEXTO DEL RESUMEN (puede ser escaso o solo recordatorios):\n${smartSample(cleanText)}\n`
+    : '';
 
-Responde SOLO con JSON válido, sin texto antes ni después. Genera 10-12 nodos:
+  const prompt = hasImages
+    ? `Eres un profesor experto analizando material de estudio. El alumno te proporcionó ${images.length} imagen(es) de sus apuntes/resúmenes y algo de texto. Tu tarea es COMPRENDER TODO el contenido — diagramas, esquemas, texto escrito a mano, tablas, flechas con etiquetas, anotaciones — y construir un mapa conceptual completo que capture TODA la información importante, igual que lo haría un docente que entiende el tema en profundidad.
+${textSection}
+Las imágenes adjuntas contienen el material real del resumen. Analizalas completamente.
+
+Respondé SOLO con JSON válido, sin texto antes ni después. Generá 10-14 nodos que cubran TODOS los conceptos importantes:
 {
-  "title": "Título exacto del tema tal como aparece en el texto",
+  "title": "Título del tema principal",
   "nodes": [
     {
       "id": 0,
-      "label": "Término exacto del texto (2-4 palabras)",
+      "label": "Concepto principal (2-4 palabras)",
       "type": "main",
-      "summary": "Primera oración del texto que introduce este concepto, COPIADA TEXTUALMENTE",
-      "content": "Párrafo o fragmento del texto original sobre este concepto, COPIADO TEXTUALMENTE sin cambiar ninguna palabra",
-      "bullets": ["Frase exacta del texto 1", "Frase exacta del texto 2", "Frase exacta del texto 3"],
+      "summary": "Descripción clara y completa del concepto principal",
+      "content": "Explicación detallada integrando TODA la información del material: texto, diagramas, esquemas, relaciones entre estructuras, etc.",
+      "bullets": ["Aspecto clave 1 con detalle", "Aspecto clave 2 con detalle", "Aspecto clave 3 con detalle"],
       "x": 600, "y": 80
     }
   ],
   "edges": [{"from": 0, "to": 1, "label": "incluye"}]
 }
 
-Reglas ABSOLUTAS:
-- summary, content y bullets deben ser CITAS TEXTUALES del resumen original — copiá las palabras exactas, sin parafrasear, sin resumir, sin cambiar nada
-- Si no encontrás texto suficiente para un campo, copiá el fragmento más relevante tal como está
-- label: término o frase corta tomada directamente del texto
-- 1 nodo "main" en x≈600, y≈80
-- 3-5 nodos "sub" en segunda fila, 5-7 nodos "detail" en tercera fila
+Reglas:
+- Analizá CADA imagen en detalle: texto manuscrito, diagramas anatómicos, esquemas, tablas, flechas, etiquetas
+- content y bullets deben integrar información de texto E imágenes, explicando relaciones, funciones, orígenes, inserciones, inervación, irrigación, etc. según corresponda al tema
+- No te limites al texto — el material visual es la fuente principal
+- 1 nodo "main", 3-5 nodos "sub" (segunda fila), 5-8 nodos "detail" (tercera fila)
 - Distribuí en espacio 1200x900px
-- NUNCA inventes, parafrasees ni resumas — solo copiá texto del original
-- NUNCA uses como label: "Concepto 1", "CARA 1", "Página N" ni etiquetas estructurales`;
+- Cubrí TODOS los conceptos que aparecen en el material, sin omitir nada importante
+- NUNCA uses labels genéricos como "Concepto 1" o "Página N"`
+    : `Eres un profesor experto organizando material de estudio en un mapa conceptual. Comprendé el tema en profundidad e identificá todos los conceptos importantes.
+${textSection}
+Respondé SOLO con JSON válido, sin texto antes ni después. Generá 10-12 nodos:
+{
+  "title": "Título del tema principal",
+  "nodes": [
+    {
+      "id": 0,
+      "label": "Concepto principal (2-4 palabras)",
+      "type": "main",
+      "summary": "Descripción del concepto",
+      "content": "Explicación completa integrando toda la información relevante del texto",
+      "bullets": ["Punto clave 1", "Punto clave 2", "Punto clave 3"],
+      "x": 600, "y": 80
+    }
+  ],
+  "edges": [{"from": 0, "to": 1, "label": "incluye"}]
+}
 
-  const raw = await askClaude(prompt, [], 4000);
+Reglas:
+- 1 nodo "main", 3-5 nodos "sub", 5-7 nodos "detail"
+- Distribuí en 1200x900px
+- Cubrí todos los conceptos del texto
+- NUNCA uses labels genéricos`;
+
+  const raw = await askClaude(prompt, selectedImages, 4000);
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Respuesta inválida de la IA');
   return JSON.parse(match[0]);
@@ -560,32 +590,35 @@ Reglas ABSOLUTAS:
 
 // Generates additional nodes to add to an existing concept map.
 // Returns only new nodes+edges, never duplicating existing labels.
-export async function expandConceptMapAI(text, existingMap) {
+export async function expandConceptMapAI(text, existingMap, images = []) {
   const cleanText = cleanTextForMap(text);
   const existingLabels = (existingMap.nodes || []).map(n => n.label).join(', ');
   const maxId = Math.max(...(existingMap.nodes || []).map(n => n.id), -1);
   const startId = maxId + 1;
+  const hasImages = images && images.length > 0;
+  const selectedImages = hasImages ? spreadImages(images, 6) : [];
 
-  const prompt = `Eres un asistente que amplía mapas conceptuales. Tu tarea es identificar conceptos importantes del texto que AÚN NO están representados en el mapa existente, y agregarlos como nuevos nodos.
+  const textSection = cleanText.trim()
+    ? `\nTEXTO DEL RESUMEN:\n${smartSample(cleanText)}\n`
+    : '';
 
-RESUMEN ORIGINAL:
-${smartSample(cleanText)}
-
+  const prompt = `Eres un profesor experto ampliando un mapa conceptual. Tu tarea es identificar conceptos importantes ${hasImages ? 'del material (texto e imágenes)' : 'del texto'} que AÚN NO están en el mapa, y agregarlos como nuevos nodos con información completa y detallada.
+${textSection}
 CONCEPTOS YA EN EL MAPA (NO repetir ninguno):
 ${existingLabels}
 
-Generá entre 4 y 8 nodos NUEVOS que aporten información relevante que falta en el mapa. Los IDs deben comenzar en ${startId}.
+${hasImages ? 'Las imágenes adjuntas contienen el material completo. Analizalas para encontrar conceptos faltantes: estructuras, funciones, relaciones, detalles clínicos, etc.\n\n' : ''}Generá entre 4 y 8 nodos NUEVOS con información relevante que falta. Los IDs deben comenzar en ${startId}.
 
 Respondé SOLO con JSON válido, sin texto antes ni después:
 {
   "nodes": [
     {
       "id": ${startId},
-      "label": "Término exacto del texto (2-4 palabras)",
+      "label": "Concepto nuevo (2-4 palabras)",
       "type": "detail",
-      "summary": "Primera oración del texto, COPIADA TEXTUALMENTE",
-      "content": "Fragmento del texto original, COPIADO TEXTUALMENTE",
-      "bullets": ["Frase exacta 1", "Frase exacta 2"],
+      "summary": "Descripción clara del concepto",
+      "content": "Explicación completa integrando toda la información relevante del material",
+      "bullets": ["Detalle importante 1", "Detalle importante 2", "Detalle importante 3"],
       "x": 200, "y": 1000
     }
   ],
@@ -593,11 +626,11 @@ Respondé SOLO con JSON válido, sin texto antes ni después:
 }
 
 Reglas:
-- summary, content y bullets: CITAS TEXTUALES del original, sin parafrasear
 - NO incluir ningún label que ya esté en el mapa
-- Usar "from" existente que sea el nodo más relacionado
+- content y bullets deben ser explicaciones completas y útiles, no solo copias de texto
+- Conectar cada nodo nuevo al nodo existente más relacionado
 - Distribuí los nuevos nodos debajo de los existentes (y > 900)
-- NUNCA inventes ni parafrasees`;
+- Cubrí aspectos faltantes: funciones, relaciones, irrigación, inervación, variantes, aplicación clínica, etc. según corresponda al tema`;
 
   const raw = await askClaude(prompt, [], 3000);
   const match = raw.match(/\{[\s\S]*\}/);
