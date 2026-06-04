@@ -162,10 +162,13 @@ export default function SidePanel({ open, onClose }) {
             {/* Header */}
             <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--soft-grey)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={() => { setActiveSummary(null); setActiveMode(null); handleClose(); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
                   <MilaLogo size={28} dark={darkMode} noAnimate />
                   <span style={{ fontSize: 17, fontWeight: 600, fontFamily: 'Playfair Display, serif', fontStyle: 'italic', color: 'var(--text-dark)' }}>MILA</span>
-                </div>
+                </button>
                 <button onClick={handleClose} style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-dark)', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 300 }}>×</button>
               </div>
               {supabaseEnabled && user && syncError && (
