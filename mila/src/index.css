@@ -77,6 +77,20 @@ input, textarea {
   font-family: inherit;
 }
 
+/* Prevent iOS Safari from forcing dark input styling when OS is in dark mode */
+body:not(.dark) input,
+body:not(.dark) textarea {
+  color-scheme: light;
+  background: var(--pale-mist) !important;
+  color: var(--text-dark) !important;
+  border-color: var(--whisper-grey) !important;
+}
+
+body:not(.dark) input::placeholder,
+body:not(.dark) textarea::placeholder {
+  color: var(--text-light) !important;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
 }
