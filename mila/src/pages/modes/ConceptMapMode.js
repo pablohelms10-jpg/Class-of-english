@@ -159,6 +159,16 @@ export default function ConceptMapMode({ summary }) {
   const [nodeGenerating, setNodeGenerating] = useState({});
   const [reassigning, setReassigning] = useState(false);
   const [expanding, setExpanding] = useState(false);
+  const [bgStyle, setBgStyle] = useState(() => {
+    try { return localStorage.getItem('mila_map_bg') || 'none'; } catch { return 'none'; }
+  });
+  function cycleBg() {
+    setBgStyle(prev => {
+      const next = prev === 'none' ? 'dots' : prev === 'dots' ? 'grid' : 'none';
+      try { localStorage.setItem('mila_map_bg', next); } catch {}
+      return next;
+    });
+  }
   const [nodePanel, setNodePanel] = useState(null); // { node, tab: 'flashcards'|'questions' }
 
   const panRef = useRef(pan);
@@ -657,6 +667,13 @@ export default function ConceptMapMode({ summary }) {
           >
             {expanding ? '⟳' : '＋'}
           </button>
+          <button
+            onClick={cycleBg}
+            title={bgStyle === 'none' ? 'Fondo liso — click para puntos' : bgStyle === 'dots' ? 'Puntos — click para cuadrícula' : 'Cuadrícula — click para liso'}
+            style={{ ...toolBtnStyle, fontSize: 13, width: 32, padding: 0 }}
+          >
+            {bgStyle === 'none' ? '□' : bgStyle === 'dots' ? '⋯' : '⊞'}
+          </button>
           <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
           <button
             onClick={toggleFullscreen}
@@ -692,7 +709,22 @@ export default function ConceptMapMode({ summary }) {
           WebkitOverflowScrolling: 'auto',
         }}
       >
-        {/* Dot grid */}
+        {/* Canvas background pattern */}
+        {bgStyle === 'dots' && (
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+            backgroundImage: 'radial-gradient(circle, var(--whisper-grey) 1.2px, transparent 1.2px)',
+            backgroundSize: '28px 28px',
+          }} />
+        )}
+        {bgStyle === 'grid' && (
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+            backgroundImage: `linear-gradient(var(--whisper-grey) 1px, transparent 1px), linear-gradient(90deg, var(--whisper-grey) 1px, transparent 1px)`,
+            backgroundSize: '28px 28px',
+            opacity: 0.5,
+          }} />
+        )}
 
         {/* Transformed canvas */}
         <div style={{
