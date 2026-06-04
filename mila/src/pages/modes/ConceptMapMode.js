@@ -277,11 +277,27 @@ export default function ConceptMapMode({ summary }) {
       .catch(e => console.error('[MILA] Image assignment failed:', e));
   }, [mapData?.nodes?.length, loadedImages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Generate concept map AFTER images are loaded so they're available for analysis
+  // Generate concept map AFTER images are loaded so they're available for analysis.
+  // If no images are available, use the free local parser instead of calling the API
+  // (avoids charging the user when the result would be low quality anyway).
   useEffect(() => {
     if (!imagesReady) return;
     if (cached) { setLoading(false); return; }
     setLoading(true);
+    if (!loadedImages.length && !text.trim()) {
+      setLoading(false);
+      return;
+    }
+    // If the summary has images but none loaded from IndexedDB yet, use free local fallback
+    // to avoid an expensive API call that would produce duplicate-label maps
+    const summaryHasImages = (summary?.images?.length || 0) > 0 || loadedImages.length > 0;
+    if (summaryHasImages && loadedImages.length === 0) {
+      // Images expected but not loaded — use free local parser, don't charge
+      const fb = generateConceptMap(text);
+      if (fb?.nodes?.length) applyMap(fb);
+      setLoading(false);
+      return;
+    }
     generateConceptMapAI(text, loadedImages)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
@@ -292,6 +308,14 @@ export default function ConceptMapMode({ summary }) {
     setLoading(true); setMapData(null); setExpanded(new Set([0]));
     setScale(0.75); setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
+    // If images are expected but not in memory, use free local parser to avoid charges
+    const summaryHasImages = (summary?.images?.length || 0) > 0 || loadedImages.length > 0;
+    if (summaryHasImages && loadedImages.length === 0) {
+      const fb = generateConceptMap(text);
+      if (fb?.nodes?.length) applyMap(fb);
+      setLoading(false);
+      return;
+    }
     generateConceptMapAI(text, loadedImages)
       .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
       .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
