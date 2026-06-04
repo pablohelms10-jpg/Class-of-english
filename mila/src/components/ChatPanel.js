@@ -297,22 +297,24 @@ export default function ChatPanel({ open, onClose }) {
 function MessageBubble({ message }) {
   const isUser = message.role === 'user';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', gap: 6 }}>
       <div style={{
         maxWidth: '88%',
-        padding: '11px 15px',
-        borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+        padding: isUser ? '10px 15px' : '14px 16px',
+        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
         background: isUser
           ? 'linear-gradient(135deg, var(--ash-plum), var(--driftwood))'
           : 'var(--pale-mist)',
         border: isUser ? 'none' : '1px solid var(--whisper-grey)',
         color: isUser ? 'white' : 'var(--text-dark)',
         fontSize: 14,
-        lineHeight: 1.55,
-        whiteSpace: 'pre-wrap',
+        lineHeight: 1.6,
         wordBreak: 'break-word',
       }}>
-        {message.content}
+        {isUser
+          ? <span>{message.content}</span>
+          : <MarkdownContent text={message.content} />
+        }
       </div>
 
       {/* Sources */}
@@ -331,6 +333,54 @@ function MessageBubble({ message }) {
       )}
     </div>
   );
+}
+
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+
+function MarkdownContent({ text }) {
+  const blocks = parseMarkdown(text);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {blocks.map((block, i) => {
+        if (block.type === 'h1') return <p key={i} style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-dark)', lineHeight: 1.4 }}>{renderInline(block.text)}</p>;
+        if (block.type === 'h2') return <p key={i} style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text-dark)', lineHeight: 1.4, marginTop: i > 0 ? 6 : 0 }}>{renderInline(block.text)}</p>;
+        if (block.type === 'h3') return <p key={i} style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-mid)', lineHeight: 1.4, marginTop: i > 0 ? 4 : 0 }}>{renderInline(block.text)}</p>;
+        if (block.type === 'li')  return <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}><span style={{ color: 'var(--driftwood)', flexShrink: 0, marginTop: 2, fontSize: 12 }}>•</span><span style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--text-dark)' }}>{renderInline(block.text)}</span></div>;
+        if (block.type === 'hr')  return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--soft-grey)', margin: '4px 0' }} />;
+        if (block.type === 'p' && block.text.trim()) return <p key={i} style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--text-dark)' }}>{renderInline(block.text)}</p>;
+        return null;
+      })}
+    </div>
+  );
+}
+
+function parseMarkdown(text) {
+  return text.split('\n').map(line => {
+    if (/^#{3}\s/.test(line)) return { type: 'h3', text: line.replace(/^#{3}\s/, '') };
+    if (/^#{2}\s/.test(line)) return { type: 'h2', text: line.replace(/^#{2}\s/, '') };
+    if (/^#{1}\s/.test(line)) return { type: 'h1', text: line.replace(/^#{1}\s/, '') };
+    if (/^[-*]\s/.test(line))  return { type: 'li', text: line.replace(/^[-*]\s/, '') };
+    if (/^---+$/.test(line.trim())) return { type: 'hr' };
+    return { type: 'p', text: line };
+  });
+}
+
+function renderInline(text) {
+  // Split on **bold** and render spans
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ fontWeight: 700, color: 'var(--text-dark)' }}>{part.slice(2, -2)}</strong>;
+    }
+    // Handle *italic*
+    const italicParts = part.split(/(\*[^*]+\*)/g);
+    return italicParts.map((ip, j) => {
+      if (ip.startsWith('*') && ip.endsWith('*') && ip.length > 2) {
+        return <em key={`${i}-${j}`} style={{ fontStyle: 'italic' }}>{ip.slice(1, -1)}</em>;
+      }
+      return <React.Fragment key={`${i}-${j}`}>{ip}</React.Fragment>;
+    });
+  });
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
