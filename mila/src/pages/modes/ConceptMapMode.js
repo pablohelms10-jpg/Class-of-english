@@ -150,14 +150,18 @@ export default function ConceptMapMode({ summary }) {
 
   const panRef = useRef(pan);
   const scaleRef = useRef(scale);
+  const positionsRef = useRef(positions);
   const panStart = useRef(null);
   const containerRef = useRef(null);
   const momentumRef = useRef(null);
   const velocityRef = useRef({ x: 0, y: 0 });
   const lastTouchTimeRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const touchDragRef = useRef(null); // { id, ox, oy } — active touch node drag
 
   useEffect(() => { panRef.current = pan; }, [pan]);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { positionsRef.current = positions; }, [positions]);
 
   // Lock body scroll in fullscreen — CSS-portal only, no native Fullscreen API.
   // This means only our button can exit fullscreen; the browser cannot override it.
@@ -285,21 +289,76 @@ export default function ConceptMapMode({ summary }) {
 
     let lastTouches = null;
     let touchMoved = false;
+    let touchStartClient = null; // initial touch position for long-press threshold
+
+    function cancelLongPress() {
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    }
 
     function handleTouchStart(e) {
       // Don't call preventDefault here — it blocks click generation for taps.
       // CSS touch-action:none on [data-mila-map] prevents page scroll instead.
       touchMoved = false;
+      cancelLongPress();
+      touchDragRef.current = null;
       if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
       velocityRef.current = { x: 0, y: 0 };
       lastTouchTimeRef.current = Date.now();
       lastTouches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+
+      // Long-press node drag: single finger held 3 s on a node starts dragging it
+      if (e.touches.length === 1) {
+        const nodeEl = e.target.closest('[data-node-id]');
+        if (nodeEl) {
+          const nodeId = parseInt(nodeEl.dataset.nodeId, 10);
+          const t0 = e.touches[0];
+          touchStartClient = { x: t0.clientX, y: t0.clientY };
+          longPressTimerRef.current = setTimeout(() => {
+            longPressTimerRef.current = null;
+            const rect = el.getBoundingClientRect();
+            const pos = positionsRef.current[nodeId];
+            if (!pos) return;
+            touchDragRef.current = {
+              id: nodeId,
+              ox: (touchStartClient.x - rect.left - panRef.current.x) / scaleRef.current - pos.x,
+              oy: (touchStartClient.y - rect.top - panRef.current.y) / scaleRef.current - pos.y,
+            };
+            touchMoved = true; // prevent expand toggle on lift
+          }, 3000);
+        }
+      } else {
+        touchStartClient = null;
+      }
     }
 
     function handleTouchMove(e) {
       e.preventDefault();
+
+      // If finger drifted more than 8 px before timer fires, cancel long-press
+      if (longPressTimerRef.current && touchStartClient && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - touchStartClient.x;
+        const dy = e.touches[0].clientY - touchStartClient.y;
+        if (Math.hypot(dx, dy) > 8) cancelLongPress();
+      }
+
       touchMoved = true;
       const touches = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+
+      // Active touch node drag — move the node, skip canvas pan
+      if (touchDragRef.current && touches.length === 1) {
+        const rect = el.getBoundingClientRect();
+        const { id, ox, oy } = touchDragRef.current;
+        setPositions(prev => ({
+          ...prev,
+          [id]: {
+            x: (touches[0].x - rect.left - panRef.current.x) / scaleRef.current - ox,
+            y: (touches[0].y - rect.top - panRef.current.y) / scaleRef.current - oy,
+          },
+        }));
+        lastTouches = touches;
+        return;
+      }
+
       if (!lastTouches || lastTouches.length !== touches.length) {
         lastTouches = touches;
         lastTouchTimeRef.current = Date.now();
@@ -338,6 +397,8 @@ export default function ConceptMapMode({ summary }) {
     }
 
     function handleTouchEnd(e) {
+      cancelLongPress();
+      touchDragRef.current = null;
       if (!touchMoved) { lastTouches = null; return; }
       const { x: vx, y: vy } = velocityRef.current;
       if (Math.abs(vx) > 1 || Math.abs(vy) > 1) {
@@ -621,7 +682,7 @@ export default function ConceptMapMode({ summary }) {
             const genState = nodeGenerating[node.id] || null;
 
             return (
-              <div key={node.id} style={{
+              <div key={node.id} data-node-id={node.id} style={{
                 position: 'absolute', left: pos.x, top: pos.y, width: NODE_W,
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
                 borderRadius: 12,
