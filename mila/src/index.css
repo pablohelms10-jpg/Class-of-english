@@ -119,6 +119,99 @@ body.dark textarea::placeholder {
 }
 
 /* ── Mobile ──────────────────────────────────────────────────────── */
+/* ── Custom themes ───────────────────────────────────────────────── */
+
+/* 1. Arena Cálida */
+body.theme-sand {
+  --ghost-white: #faf7f0; --moonbeam: #f4ede0; --pale-mist: #ede5d2;
+  --cloud-veil: #e8e3cd; --feather-fog: #e0d8c0; --soft-grey: #d8cfb8;
+  --whisper-grey: #cbb095; --feather-touch: #d0c4a0; --stone-grey: #7a5e46;
+  --driftwood: #ad9277; --ash-plum: #96785e;
+  --text-dark: #2c1e10; --text-mid: #7a5c3e; --text-light: #a08060;
+}
+body.dark.theme-sand { --driftwood: #c8a882; --ash-plum: #ad9277; }
+
+/* 2. Rosa Polvo */
+body.theme-rose {
+  --ghost-white: #fdf8f5; --moonbeam: #f8f0eb; --pale-mist: #f0e4dc;
+  --cloud-veil: #ead6cc; --feather-fog: #e8d0c6; --soft-grey: #dcc8bc;
+  --whisper-grey: #d7b8b6; --feather-touch: #d8c4be; --stone-grey: #8a5a58;
+  --driftwood: #c1a3a1; --ash-plum: #bd8c88;
+  --text-dark: #3d1f1e; --text-mid: #8a5a58; --text-light: #b08280;
+}
+body.dark.theme-rose { --driftwood: #d4b5b3; --ash-plum: #c1a3a1; }
+
+/* 3. Salvia */
+body.theme-sage {
+  --ghost-white: #f7f7ee; --moonbeam: #f2f2e6; --pale-mist: #eaeadb;
+  --cloud-veil: #e1e3ce; --feather-fog: #d8dac2; --soft-grey: #d0d2ba;
+  --whisper-grey: #bbb59d; --feather-touch: #cac8b2; --stone-grey: #6e6e58;
+  --driftwood: #999383; --ash-plum: #86806e;
+  --text-dark: #282c18; --text-mid: #666858; --text-light: #8a8872;
+}
+body.dark.theme-sage { --driftwood: #b8b39e; --ash-plum: #999383; }
+
+/* 4. Gris Fresco */
+body.theme-grey {
+  --ghost-white: #f5f5f3; --moonbeam: #f0f0ee; --pale-mist: #e8e8e5;
+  --cloud-veil: #d6d5d1; --feather-fog: #d0cfcb; --soft-grey: #c8c8c4;
+  --whisper-grey: #babcaf; --feather-touch: #c8c8c2; --stone-grey: #5a5a52;
+  --driftwood: #88887a; --ash-plum: #74746a;
+  --text-dark: #1a1a18; --text-mid: #585852; --text-light: #8a8a82;
+}
+body.dark.theme-grey { --driftwood: #a8a89a; --ash-plum: #90907e; }
+
+/* 5. Menta */
+body.theme-mint {
+  --ghost-white: #f1f6f2; --moonbeam: #eaf2ec; --pale-mist: #e0ece3;
+  --cloud-veil: #cdd9cf; --feather-fog: #c8d8ca; --soft-grey: #bfd0c2;
+  --whisper-grey: #a1b8a6; --feather-touch: #bcd4be; --stone-grey: #4e6858;
+  --driftwood: #7a9880; --ash-plum: #647a6a;
+  --text-dark: #182618; --text-mid: #446050; --text-light: #6e9078;
+}
+body.dark.theme-mint { --driftwood: #97b8a6; --ash-plum: #7a9880; }
+
+/* 6. Polvo Cálido */
+body.theme-dust {
+  --ghost-white: #f8f2ec; --moonbeam: #f2e8e0; --pale-mist: #ead9ce;
+  --cloud-veil: #e1cbbd; --feather-fog: #d8c0b0; --soft-grey: #d0b8a6;
+  --whisper-grey: #cac1ae; --feather-touch: #d0bcaa; --stone-grey: #6e5444;
+  --driftwood: #b4a296; --ash-plum: #938173;
+  --text-dark: #2d1a10; --text-mid: #7a5840; --text-light: #a07858;
+}
+body.dark.theme-dust { --driftwood: #c8b4a4; --ash-plum: #b4a296; }
+
+/* 7. Humo */
+body.theme-smoke {
+  --ghost-white: #f4f4f2; --moonbeam: #ededeb; --pale-mist: #e5e5e3;
+  --cloud-veil: #dfe0db; --feather-fog: #d8d9d4; --soft-grey: #cccdc8;
+  --whisper-grey: #b1b4aa; --feather-touch: #c8c9c4; --stone-grey: #4e5050;
+  --driftwood: #7e8480; --ash-plum: #636862;
+  --text-dark: #1a1c19; --text-mid: #4a4e4a; --text-light: #787e7a;
+}
+body.dark.theme-smoke { --driftwood: #9aa09a; --ash-plum: #7e8480; }
+
+/* 8. Pizarra */
+body.theme-slate {
+  --ghost-white: #eef5f4; --moonbeam: #e8f0ef; --pale-mist: #deeae9;
+  --cloud-veil: #d0e0dd; --feather-fog: #c4d8d5; --soft-grey: #b8d0cd;
+  --whisper-grey: #a3b6bd; --feather-touch: #b8cccb; --stone-grey: #385860;
+  --driftwood: #6e8890; --ash-plum: #505b5d;
+  --text-dark: #0f1e20; --text-mid: #365060; --text-light: #608090;
+}
+body.dark.theme-slate { --driftwood: #7ea0a8; --ash-plum: #6e8890; }
+
+/* 9. Petróleo */
+body.theme-teal {
+  --ghost-white: #ecf0f0; --moonbeam: #e6eaea; --pale-mist: #dce4e4;
+  --cloud-veil: #d1d5d4; --feather-fog: #c8cecc; --soft-grey: #bdc7c6;
+  --whisper-grey: #a5b4b9; --feather-touch: #b8c6c6; --stone-grey: #344850;
+  --driftwood: #6a8488; --ash-plum: #4b5d5f;
+  --text-dark: #0d1a1b; --text-mid: #2e4850; --text-light: #5a7880;
+}
+body.dark.theme-teal { --driftwood: #7090a0; --ash-plum: #6a8488; }
+
+/* ── Mobile ──────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .header-title-label { display: none !important; }
   .header-sync-label { display: none !important; }

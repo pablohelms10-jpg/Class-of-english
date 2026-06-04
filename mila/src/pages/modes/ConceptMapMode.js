@@ -337,7 +337,7 @@ export default function ConceptMapMode({ summary }) {
               oy: (touchStartClient.y - rect.top - panRef.current.y) / scaleRef.current - pos.y,
             };
             touchMoved = true; // prevent expand toggle on lift
-          }, 3000);
+          }, 1500);
         }
       } else {
         touchStartClient = null;

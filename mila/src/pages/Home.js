@@ -297,9 +297,7 @@ export default function Home() {
             onClick={() => setDailyOpen(true)}
             style={{
               width: '100%', padding: '18px 20px', borderRadius: 'var(--radius-md)',
-              background: darkMode
-                ? 'linear-gradient(135deg, #111111 0%, #1e1e1e 100%)'
-                : 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)',
+              background: darkMode ? 'var(--cloud-veil)' : 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)',
               border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'opacity 0.2s',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
             }}

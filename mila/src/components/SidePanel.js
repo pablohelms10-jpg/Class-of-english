@@ -12,10 +12,24 @@ const TAG_OPTIONS = [
   { id: 'efi',  label: 'EFI',   color: '#7A5E6B' },
 ];
 
+const THEMES = [
+  { id: 'default', name: 'Original',      palette: ['#F2F1EE','#DAD5CF','#C1B7AF','#B0A8A4','#96948F'], textOnDark: '#2C2C2C' },
+  { id: 'sand',    name: 'Arena Cálida',   palette: ['#e8e3cd','#e4d0b7','#cbb095','#ad9277','#96785e'], textOnDark: '#2c1e10' },
+  { id: 'rose',    name: 'Rosa Polvo',     palette: ['#dfcec4','#e7d6c6','#d7b8b6','#c1a3a1','#bd8c88'], textOnDark: '#3d1f1e' },
+  { id: 'sage',    name: 'Salvia',         palette: ['#e1e3ce','#c0c2ac','#d9c8ac','#bbb59d','#999383'], textOnDark: '#282c18' },
+  { id: 'grey',    name: 'Gris Fresco',    palette: ['#d6d5d1','#c7cac3','#babcaf','#a1a199','#88887a'], textOnDark: '#1a1a18' },
+  { id: 'mint',    name: 'Menta',          palette: ['#cdd9cf','#b7c1a9','#a1b8a6','#97a38f','#767970'], textOnDark: '#182618' },
+  { id: 'dust',    name: 'Polvo Cálido',   palette: ['#e1cbbd','#cac1ae','#b4a296','#938173','#7a6458'], textOnDark: '#2d1a10' },
+  { id: 'smoke',   name: 'Humo',           palette: ['#dfe0db','#cccdc8','#b1b4aa','#7e8480','#636862'], textOnDark: '#1a1c19' },
+  { id: 'slate',   name: 'Pizarra',        palette: ['#d0e0dd','#b2c6c4','#a3b6bd','#7e8f97','#505b5d'], textOnDark: '#0f1e20' },
+  { id: 'teal',    name: 'Petróleo',       palette: ['#d1d5d4','#bdc7d3','#a5b4b9','#888a89','#4b5d5f'], textOnDark: '#0d1a1b' },
+];
+
 export default function SidePanel({ open, onClose }) {
-  const { summaries, darkMode, toggleDark, user, signOut, supabaseEnabled, syncError,
+  const { summaries, darkMode, toggleDark, customTheme, setCustomTheme,
+          user, signOut, supabaseEnabled, syncError,
           setActiveSummary, setActiveMode, updateSummary, deleteSummary } = useMila();
-  const [view, setView] = useState('menu'); // 'menu' | 'library' | 'stats'
+  const [view, setView] = useState('menu'); // 'menu' | 'library' | 'stats' | 'settings'
   const [chatOpen, setChatOpen] = useState(false);
   const [editingSummaryId, setEditingSummaryId] = useState(null);
   const [editSummaryTitle, setEditSummaryTitle] = useState('');
@@ -34,6 +48,8 @@ export default function SidePanel({ open, onClose }) {
     onClose();
     setTimeout(() => { setView('menu'); setSelectMode(false); setSelected(new Set()); }, 350);
   }
+
+  function goSettings() { setView('settings'); }
 
   // ── Library helpers ──────────────────────────────────────────
   const grouped = summaries.reduce((acc, s) => {
@@ -213,7 +229,7 @@ export default function SidePanel({ open, onClose }) {
                 <NavItem
                   icon={<ConfigIcon />}
                   label="Configuración"
-                  onClick={() => {}}
+                  onClick={goSettings}
                   subdued
                 />
               </div>
@@ -440,6 +456,100 @@ export default function SidePanel({ open, onClose }) {
                   </button>
                 );
               })}
+            </div>
+          </>
+        )}
+
+        {/* ── SETTINGS VIEW ── */}
+        {view === 'settings' && (
+          <>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--soft-grey)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => setView('menu')} style={{ padding: '4px 6px', borderRadius: 6, background: 'var(--soft-grey)', color: 'var(--text-mid)', fontSize: 12, display: 'flex', alignItems: 'center' }}>‹</button>
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-dark)' }}>Configuración</h2>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 32px' }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+                Tema personalizado
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {THEMES.map(theme => {
+                  const isActive = (customTheme || 'default') === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => setCustomTheme(theme.id)}
+                      style={{
+                        padding: '12px 10px 10px',
+                        borderRadius: 14,
+                        border: isActive ? '2px solid var(--driftwood)' : '2px solid transparent',
+                        background: theme.palette[0],
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.2s',
+                        boxShadow: isActive ? '0 0 0 3px rgba(193,183,175,0.25)' : 'none',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Color swatch row */}
+                      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                        {theme.palette.slice(1).map((c, i) => (
+                          <div key={i} style={{
+                            width: 18, height: 18, borderRadius: '50%',
+                            background: c,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                            flexShrink: 0,
+                          }} />
+                        ))}
+                      </div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 600,
+                        color: theme.textOnDark,
+                        letterSpacing: '0.01em',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {theme.name}
+                      </div>
+                      {isActive && (
+                        <div style={{
+                          position: 'absolute', top: 7, right: 7,
+                          width: 16, height: 16, borderRadius: '50%',
+                          background: theme.palette[3],
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                            <path d="M1 3L3.5 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ marginTop: 28, padding: '14px 16px', borderRadius: 12, background: 'var(--pale-mist)', border: '1px solid var(--soft-grey)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dark)', marginBottom: 6 }}>Modo oscuro</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-mid)' }}>{darkMode ? 'Activado' : 'Desactivado'}</span>
+                  <button
+                    onClick={toggleDark}
+                    style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: darkMode ? 'var(--driftwood)' : 'var(--soft-grey)',
+                      position: 'relative', transition: 'background 0.3s', cursor: 'pointer',
+                      border: 'none', flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute', top: 3, left: darkMode ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%', background: 'white',
+                      transition: 'left 0.3s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                    }} />
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )}
