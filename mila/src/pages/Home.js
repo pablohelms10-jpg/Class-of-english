@@ -67,11 +67,13 @@ export default function Home() {
             await new Promise(r => setTimeout(r, 2500));
           }
 
-          // Detect image-only PDF: fewer than 20 words per page means pdfjs
-          // found almost no embedded text — the content lives in the images.
+          // Detect image-only PDF: fewer than 5 words per page means pdfjs
+          // found essentially nothing — the content lives in the page images.
+          // Threshold is intentionally conservative to avoid false positives on
+          // light-text PDFs (diagrams with labels, slides with few bullets, etc.)
           const pdfWords = result.text.trim().split(/\s+/).filter(Boolean).length;
           const pageCount = result.images.length || 1;
-          const isImageOnly = pdfWords < pageCount * 20 && result.images.length > 0;
+          const isImageOnly = pdfWords < pageCount * 5 && result.images.length > 0;
 
           if (isImageOnly) {
             setLoadingMsg(`PDF con solo imágenes — leyendo texto con OCR (${result.images.length} páginas)…`);

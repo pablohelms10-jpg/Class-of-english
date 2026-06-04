@@ -35,7 +35,8 @@ export function MilaProvider({ children }) {
 
   function updateSummary(id, changes) {
     setSummaries(prev => prev.map(s => s.id === id ? { ...s, ...changes } : s));
-    if (activeSummary?.id === id) setActiveSummary(s => ({ ...s, ...changes }));
+    // Use functional update to merge into latest state, not stale closure value
+    setActiveSummary(prev => prev?.id === id ? { ...prev, ...changes } : prev);
   }
 
   function deleteSummary(id) {

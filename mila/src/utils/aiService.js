@@ -27,6 +27,7 @@ async function compressImage(dataUrl, maxPx = 480) {
 // Sends page images in batches of 4 and extracts all visible text.
 // Returns a single combined string ready to feed into concept map generation.
 export async function ocrImagePages(images, onProgress) {
+  if (!API_KEY) throw new Error('No API key configurada');
   const pages = images.slice(0, 20); // cap at 20 pages
   if (pages.length === 0) return '';
 
@@ -68,8 +69,11 @@ Si una página no tiene texto legible, escribí "(sin texto)" en esa sección.`,
     });
 
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000); // 45 s timeout per batch
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': API_KEY,
@@ -82,12 +86,13 @@ Si una página no tiene texto legible, escribí "(sin texto)" en esa sección.`,
           messages: [{ role: 'user', content }],
         }),
       });
+      clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
         allText.push(data.content[0].text);
       }
     } catch (e) {
-      console.warn('[MILA OCR] Error en lote', startPage, e);
+      console.warn('[MILA OCR] Error en lote', startPage, e.name === 'AbortError' ? 'timeout' : e);
     }
 
     if (onProgress) onProgress(Math.min(i + BATCH, pages.length), pages.length);
