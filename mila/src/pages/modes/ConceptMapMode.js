@@ -10,92 +10,113 @@ const NODE_W = 270;
 const CANVAS_W = 3000;
 const CANVAS_H = 2000;
 
-// Mini flashcard component with its own flip state
-function MiniFlashcard({ card }) {
+// Mini flashcard carousel — cycles through all cards for a node
+function MiniFlashcard({ cards }) {
+  const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const card = cards[idx];
+  if (!card) return null;
+  function prev(e) { e.stopPropagation(); setIdx(i => (i - 1 + cards.length) % cards.length); setFlipped(false); }
+  function next(e) { e.stopPropagation(); setIdx(i => (i + 1) % cards.length); setFlipped(false); }
   return (
-    <div
-      onClick={e => { e.stopPropagation(); setFlipped(f => !f); }}
-      style={{
-        marginTop: 10,
-        borderRadius: 8,
-        border: '1px solid var(--soft-grey)',
-        background: flipped ? 'var(--pale-mist)' : 'var(--ghost-white)',
-        padding: '9px 10px',
-        cursor: 'pointer',
-        transition: 'background 0.2s',
-        userSelect: 'none',
-      }}
-    >
-      <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 4, fontWeight: 500 }}>
-        {flipped ? 'Respuesta' : 'Flashcard · tocá para ver'}
+    <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, userSelect: 'none' }}>
+      <div
+        onClick={() => setFlipped(f => !f)}
+        style={{
+          borderRadius: 8,
+          border: '1px solid var(--soft-grey)',
+          background: flipped ? 'var(--pale-mist)' : 'var(--ghost-white)',
+          padding: '9px 10px',
+          cursor: 'pointer',
+          transition: 'background 0.2s',
+        }}
+      >
+        <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 4, fontWeight: 500 }}>
+          {flipped ? 'Respuesta' : 'Flashcard · tocá para ver'}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5 }}>
+          {flipped ? card.back : card.front}
+        </div>
+        {flipped && card.context && (
+          <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 5, fontStyle: 'italic', lineHeight: 1.4 }}>
+            {card.context}
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5 }}>
-        {flipped ? card.back : card.front}
-      </div>
-      {flipped && card.context && (
-        <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 5, fontStyle: 'italic', lineHeight: 1.4 }}>
-          {card.context}
+      {cards.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
+          <button onClick={prev} style={miniNavBtn}>‹</button>
+          <span style={{ fontSize: 9, color: 'var(--text-light)' }}>{idx + 1} / {cards.length}</span>
+          <button onClick={next} style={miniNavBtn}>›</button>
         </div>
       )}
     </div>
   );
 }
 
-// Mini question component with its own selected state
-function MiniQuestion({ question }) {
+// Mini question carousel — cycles through all questions for a node
+function MiniQuestion({ questions }) {
+  const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState(null);
+  const question = questions[idx];
+  if (!question) return null;
   const options = question.options || [];
+  function prev(e) { e.stopPropagation(); setIdx(i => (i - 1 + questions.length) % questions.length); setSelected(null); }
+  function next(e) { e.stopPropagation(); setIdx(i => (i + 1) % questions.length); setSelected(null); }
   return (
-    <div
-      onClick={e => e.stopPropagation()}
-      style={{
-        marginTop: 10,
+    <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, userSelect: 'none' }}>
+      <div style={{
         borderRadius: 8,
         border: '1px solid var(--soft-grey)',
         background: 'var(--ghost-white)',
         padding: '9px 10px',
-        userSelect: 'none',
-      }}
-    >
-      <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 5, fontWeight: 500 }}>Pregunta</div>
-      <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5, marginBottom: 7 }}>{question.question}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {options.map((opt, i) => {
-          const isCorrect = opt === question.correct;
-          const isSelected = selected === opt;
-          let bg = 'transparent';
-          let borderColor = 'var(--soft-grey)';
-          let color = 'var(--text-dark)';
-          if (selected) {
-            if (isCorrect) { bg = '#d4edda'; borderColor = '#7BAE7F'; color = '#2d6a33'; }
-            else if (isSelected) { bg = '#fde8e8'; borderColor = '#e57373'; color = '#b71c1c'; }
-          }
-          return (
-            <button
-              key={i}
-              onClick={() => { if (!selected) setSelected(opt); }}
-              style={{
-                textAlign: 'left', padding: '5px 8px', borderRadius: 6,
-                border: `1px solid ${borderColor}`,
-                background: bg, color, fontSize: 10, lineHeight: 1.4,
-                cursor: selected ? 'default' : 'pointer',
-                transition: 'background 0.15s, border-color 0.15s',
-              }}
-            >
-              {opt}
-            </button>
-          );
-        })}
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 5, fontWeight: 500 }}>Pregunta</div>
+        <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5, marginBottom: 7 }}>{question.question}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {options.map((opt, i) => {
+            const isCorrect = opt === question.correct;
+            const isSelected = selected === opt;
+            let bg = 'transparent', borderColor = 'var(--soft-grey)', color = 'var(--text-dark)';
+            if (selected) {
+              if (isCorrect) { bg = '#d4edda'; borderColor = '#7BAE7F'; color = '#2d6a33'; }
+              else if (isSelected) { bg = '#fde8e8'; borderColor = '#e57373'; color = '#b71c1c'; }
+            }
+            return (
+              <button key={i} onClick={() => { if (!selected) setSelected(opt); }}
+                style={{ textAlign: 'left', padding: '5px 8px', borderRadius: 6, border: `1px solid ${borderColor}`, background: bg, color, fontSize: 10, lineHeight: 1.4, cursor: selected ? 'default' : 'pointer', transition: 'background 0.15s, border-color 0.15s' }}>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        {selected && question.explanation && (
+          <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>
+            {question.explanation}
+          </div>
+        )}
       </div>
-      {selected && question.explanation && (
-        <div style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4 }}>
-          {question.explanation}
+      {questions.length > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
+          <button onClick={prev} style={miniNavBtn}>‹</button>
+          <span style={{ fontSize: 9, color: 'var(--text-light)' }}>{idx + 1} / {questions.length}</span>
+          <button onClick={next} style={miniNavBtn}>›</button>
         </div>
       )}
     </div>
   );
 }
+
+const miniNavBtn = {
+  width: 26, height: 22, borderRadius: 6,
+  border: '1px solid var(--soft-grey)',
+  background: 'var(--ghost-white)',
+  color: 'var(--text-mid)',
+  fontSize: 14, lineHeight: 1,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
+};
 
 export default function ConceptMapMode({ summary }) {
   const { updateSummary } = useMila();
@@ -236,7 +257,9 @@ export default function ConceptMapMode({ summary }) {
     }
   }
 
-  // Wheel + touch events attached imperatively for passive:false support
+  // Wheel + touch events attached imperatively for passive:false support.
+  // Depends on [isFullscreen, loading] so it re-attaches after the map finishes
+  // loading (containerRef is null during the loading screen).
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -264,7 +287,8 @@ export default function ConceptMapMode({ summary }) {
     let touchMoved = false;
 
     function handleTouchStart(e) {
-      e.preventDefault();
+      // Don't call preventDefault here — it blocks click generation for taps.
+      // CSS touch-action:none on [data-mila-map] prevents page scroll instead.
       touchMoved = false;
       if (momentumRef.current) { cancelAnimationFrame(momentumRef.current); momentumRef.current = null; }
       velocityRef.current = { x: 0, y: 0 };
@@ -344,7 +368,8 @@ export default function ConceptMapMode({ summary }) {
       el.removeEventListener('touchmove', handleTouchMove);
       el.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isFullscreen]); // re-attach when portal moves the canvas to a new DOM node
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, loading]); // re-attach when fullscreen or loading state changes (containerRef is null during load)
 
   const onCanvasPanStart = useCallback(e => {
     if (dragging) return;
@@ -591,9 +616,6 @@ export default function ConceptMapMode({ summary }) {
                   ? 'var(--driftwood)'
                   : 'var(--whisper-grey)';
 
-            // Find linked flashcard and question for this node
-            const linkedCard = flashcards.find(f => f.conceptLabel === node.label) || null;
-            const linkedQuestion = questions.find(q => q.conceptLabel === node.label) || null;
             const nodeCardCount = flashcards.filter(f => f.conceptLabel === node.label).length;
             const nodeQCount = questions.filter(q => q.conceptLabel === node.label).length;
             const genState = nodeGenerating[node.id] || null;
@@ -646,11 +668,11 @@ export default function ConceptMapMode({ summary }) {
                         </ul>
                       )}
 
-                      {/* Inline mini flashcard */}
-                      {linkedCard && <MiniFlashcard card={linkedCard} />}
+                      {/* Inline mini flashcard carousel */}
+                      {nodeCardCount > 0 && <MiniFlashcard cards={flashcards.filter(f => f.conceptLabel === node.label)} />}
 
-                      {/* Inline mini question */}
-                      {linkedQuestion && <MiniQuestion question={linkedQuestion} />}
+                      {/* Inline mini question carousel */}
+                      {nodeQCount > 0 && <MiniQuestion questions={questions.filter(q => q.conceptLabel === node.label)} />}
 
                       {/* Per-node generate buttons */}
                       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
