@@ -91,10 +91,14 @@ export default function Layout({ children }) {
                 background: 'transparent',
                 border: '1.5px solid var(--soft-grey)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: 'var(--text-light)', fontSize: 13,
+                cursor: 'pointer', color: 'var(--text-light)',
               }}
             >
-              ↪
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M6 2H3a1 1 0 00-1 1v9a1 1 0 001 1h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                <path d="M10 10l3-2.5L10 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="13" y1="7.5" x2="6" y2="7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
             </button>
           )}
         </div>
