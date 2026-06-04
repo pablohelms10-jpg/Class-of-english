@@ -16,7 +16,7 @@ export default function Layout({ children }) {
       flexDirection: 'column',
     }}>
       <header style={{
-        padding: '24px 32px',
+        padding: 'clamp(12px, 2vw, 20px) clamp(16px, 4vw, 28px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -26,59 +26,60 @@ export default function Layout({ children }) {
         position: 'sticky',
         top: 0,
         zIndex: 100,
+        gap: 8,
       }}>
         <button
           onClick={() => { setActiveSummary(null); setActiveMode(null); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
         >
-          <MilaLogo size={36} dark={darkMode} noAnimate={true} />
-          <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-dark)', fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>MILA</span>
+          <MilaLogo size={30} dark={darkMode} noAnimate={true} />
+          <span className="header-title-label" style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-dark)', fontFamily: 'Playfair Display, serif', fontStyle: 'italic' }}>MILA</span>
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {activeSummary && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: 'var(--driftwood)',
-              }} />
-              <span style={{ fontSize: 13, color: 'var(--text-mid)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {activeSummary.title}
-              </span>
-            </div>
-          )}
+        {activeSummary && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, justifyContent: 'center' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--driftwood)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: 'var(--text-mid)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {activeSummary.title}
+            </span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => setLibraryOpen(true)}
             title="Biblioteca"
             style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 34, height: 34, borderRadius: 10,
               background: 'transparent',
               border: '1.5px solid var(--soft-grey)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', transition: 'all 0.2s ease',
-              color: 'var(--text-mid)',
+              cursor: 'pointer', color: 'var(--text-mid)',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--soft-grey)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="2" width="4" height="12" rx="1" fill="currentColor" opacity="0.7"/>
               <rect x="6" y="2" width="4" height="12" rx="1" fill="currentColor" opacity="0.85"/>
               <rect x="11" y="2" width="4" height="12" rx="1" fill="currentColor"/>
             </svg>
           </button>
           {supabaseEnabled && user && syncError && (
-            <div style={{
-              fontSize: 11, padding: '3px 8px', borderRadius: 8, maxWidth: 260,
+            <div className="header-sync-label" style={{
+              fontSize: 11, padding: '3px 8px', borderRadius: 8, flexShrink: 0,
               background: syncError === 'ok' ? 'rgba(60,160,80,0.12)' : 'rgba(180,60,60,0.12)',
               color: syncError === 'ok' ? '#2a7' : '#a33',
               border: `1px solid ${syncError === 'ok' ? 'rgba(60,160,80,0.3)' : 'rgba(180,60,60,0.3)'}`,
-              wordBreak: 'break-all',
             }}>
-              {syncError === 'ok' ? '✓ Nube' : `⚠ ${syncError}`}
+              {syncError === 'ok' ? '✓ Nube' : '⚠ Sin nube'}
             </div>
+          )}
+          {/* On mobile: show sync status as dot only */}
+          {supabaseEnabled && user && syncError && (
+            <div className="header-sync-dot" title={syncError === 'ok' ? 'Sincronizado' : syncError} style={{
+              display: 'none',
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: syncError === 'ok' ? '#2a7' : '#a33',
+            }} />
           )}
           <DarkModeToggle dark={darkMode} onToggle={toggleDark} />
           {supabaseEnabled && user && (
@@ -86,14 +87,12 @@ export default function Layout({ children }) {
               onClick={signOut}
               title={`Cerrar sesión (${user.email})`}
               style={{
-                width: 36, height: 36, borderRadius: 10,
+                width: 34, height: 34, borderRadius: 10,
                 background: 'transparent',
                 border: '1.5px solid var(--soft-grey)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: 'var(--text-light)', fontSize: 14,
+                cursor: 'pointer', color: 'var(--text-light)', fontSize: 13,
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--soft-grey)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               ↪
             </button>
@@ -101,11 +100,11 @@ export default function Layout({ children }) {
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: '32px 24px', maxWidth: 900, width: '100%', margin: '0 auto', animation: 'fadeUp 0.5s ease both' }}>
+      <main style={{ flex: 1, padding: 'clamp(16px, 4vw, 32px) clamp(12px, 4vw, 24px)', maxWidth: 900, width: '100%', margin: '0 auto', animation: 'fadeUp 0.5s ease both' }}>
         {children}
       </main>
 
-      <footer style={{ padding: '16px 32px', textAlign: 'center', borderTop: `1px solid var(--soft-grey)` }}>
+      <footer style={{ padding: '12px 16px', textAlign: 'center', borderTop: `1px solid var(--soft-grey)` }}>
         <span style={{ fontSize: 11, color: 'var(--text-light)', letterSpacing: '0.5px' }}>MILA · Tu asistente de estudio</span>
       </footer>
       <LibraryPanel open={libraryOpen} onClose={() => setLibraryOpen(false)} />

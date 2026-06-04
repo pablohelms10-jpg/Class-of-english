@@ -33,9 +33,9 @@ export default function SummaryDetail() {
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: 24, fontWeight: 500, color: 'var(--text-dark)', marginBottom: 5, letterSpacing: '-0.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <h2 style={{ fontSize: 'clamp(16px, 4vw, 22px)', fontWeight: 500, color: 'var(--text-dark)', marginBottom: 4, letterSpacing: '-0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {activeSummary.title}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-light)' }}>

@@ -284,7 +284,7 @@ export default function Home() {
                 <span style={{ fontSize: 10, color: 'var(--text-light)', marginLeft: 2 }}>{collapsedSubjects[subjectKey] ? '▶' : '▼'}</span>
               </button>
               {!collapsedSubjects[subjectKey] && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+                <div className="summary-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
                   {subjectSummaries.map(s => (
                     <SummaryCard key={s.id} summary={s} onOpen={() => setActiveSummary(s)} onOpenMode={(modeId) => openMode(s, modeId)} onDelete={() => deleteSummary(s.id)} />
                   ))}

@@ -563,28 +563,28 @@ export default function ConceptMapMode({ summary }) {
       </div>
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0 }}>
-        <p style={{ fontSize: 12, color: 'var(--text-light)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0, gap: 6, flexWrap: 'nowrap' }}>
+        <p style={{ fontSize: 11, color: 'var(--text-light)', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isFullscreen
             ? (mapData.title || 'Mapa conceptual')
-            : 'Pellizca · arrastrá para mover · ⛶ pantalla completa'}
+            : 'Pellizca · arrastrá · pantalla completa ⛶'}
         </p>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
           <button onClick={() => zoom(1.2)} style={toolBtnStyle} title="Acercar">+</button>
-          <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 34, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+          <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 32, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
           <button onClick={() => zoom(1 / 1.2)} style={toolBtnStyle} title="Alejar">−</button>
           <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
           {images.length > 0 && (
             <button
               onClick={reassignImages}
               disabled={reassigning}
-              title="Reasignar imágenes leyendo el texto de cada imagen"
-              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto', opacity: reassigning ? 0.5 : 1 }}
+              title="Reasignar imágenes"
+              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: reassigning ? 0.5 : 1 }}
             >
-              {reassigning ? '⟳ Asignando…' : '🖼 Imágenes'}
+              {reassigning ? '⟳' : '🖼'}
             </button>
           )}
-          <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto' }}>↺ Regenerar</button>
+          <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
           <button
             onClick={toggleFullscreen}
             title={isFullscreen ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}

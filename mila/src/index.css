@@ -117,3 +117,13 @@ body.dark textarea::placeholder {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* ── Mobile ──────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .header-title-label { display: none !important; }
+  .header-sync-label { display: none !important; }
+  .header-sync-dot { display: block !important; }
+  .summary-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
