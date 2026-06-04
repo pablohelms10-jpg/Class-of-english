@@ -23,8 +23,10 @@ export default function ChatPanel({ open, onClose }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const msgRefs = useRef({});
   const corpusRef = useRef(null);
 
   // Rebuild corpus whenever summaries change
@@ -49,7 +51,7 @@ export default function ChatPanel({ open, onClose }) {
     setInput('');
     setError('');
 
-    const userMsg = { role: 'user', content: query, id: Date.now() };
+    const userMsg = { role: 'user', content: query, id: Date.now(), timestamp: new Date().toISOString() };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setLoading(true);
@@ -149,11 +151,20 @@ export default function ChatPanel({ open, onClose }) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
+            {messages.some(m => m.role === 'user') && (
+              <button
+                onClick={() => setHistoryOpen(true)}
+                title="Historial de preguntas"
+                style={{ width: 30, height: 30, borderRadius: 8, background: historyOpen ? 'var(--soft-grey)' : 'transparent', border: '1px solid var(--soft-grey)', color: 'var(--text-mid)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+              >
+                <HistoryIcon />
+              </button>
+            )}
             {messages.length > 0 && (
               <button
                 onClick={clearHistory}
                 title="Limpiar conversación"
-                style={{ width: 30, height: 30, borderRadius: 8, background: 'transparent', border: '1px solid var(--soft-grey)', color: 'var(--text-light)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: 30, height: 30, borderRadius: 8, background: 'transparent', border: '1px solid var(--soft-grey)', color: 'var(--text-light)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 <TrashIcon />
               </button>
@@ -206,7 +217,9 @@ export default function ChatPanel({ open, onClose }) {
 
           {/* Message list */}
           {messages.map(msg => (
-            <MessageBubble key={msg.id} message={msg} />
+            <div key={msg.id} ref={el => { if (el) msgRefs.current[msg.id] = el; }}>
+              <MessageBubble message={msg} />
+            </div>
           ))}
 
           {/* Loading indicator */}
@@ -288,6 +301,81 @@ export default function ChatPanel({ open, onClose }) {
           <p style={{ fontSize: 10, color: 'var(--text-light)', marginTop: 6, textAlign: 'center' }}>
             Enter para enviar · Shift+Enter para nueva línea
           </p>
+        </div>
+
+        {/* History overlay — slides in over the chat */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'var(--ghost-white)',
+          transform: historyOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+          display: 'flex', flexDirection: 'column', zIndex: 10,
+        }}>
+          {/* History header */}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--soft-grey)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <HistoryIcon color="var(--driftwood)" />
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-dark)', margin: 0 }}>Historial de preguntas</h2>
+            </div>
+            <button
+              onClick={() => setHistoryOpen(false)}
+              style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--soft-grey)', color: 'var(--text-dark)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 300, cursor: 'pointer' }}
+            >×</button>
+          </div>
+
+          {/* History list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 24px', WebkitOverflowScrolling: 'touch' }}>
+            {messages.filter(m => m.role === 'user').length === 0 ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-light)', fontSize: 13, padding: '40px 0' }}>Sin preguntas todavía</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {messages.filter(m => m.role === 'user').map((msg, idx) => {
+                  const date = msg.timestamp ? new Date(msg.timestamp) : null;
+                  const timeStr = date ? date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+                  const dateStr = date ? date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+                  return (
+                    <button
+                      key={msg.id}
+                      onClick={() => {
+                        setHistoryOpen(false);
+                        setTimeout(() => {
+                          const el = msgRefs.current[msg.id];
+                          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          // Flash highlight
+                          if (el) {
+                            el.style.transition = 'background 0.2s';
+                            el.style.background = 'rgba(193,165,124,0.18)';
+                            el.style.borderRadius = '12px';
+                            setTimeout(() => { el.style.background = ''; el.style.borderRadius = ''; }, 1200);
+                          }
+                        }, 320);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        padding: '11px 14px', borderRadius: 12, textAlign: 'left',
+                        background: 'var(--pale-mist)', border: '1px solid var(--whisper-grey)',
+                        cursor: 'pointer', transition: 'all 0.15s', width: '100%',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--driftwood)'; e.currentTarget.style.background = 'var(--soft-grey)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--whisper-grey)'; e.currentTarget.style.background = 'var(--pale-mist)'; }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--driftwood)', flexShrink: 0, marginTop: 1 }}>
+                        {idx + 1}
+                      </span>
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-dark)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {msg.content}
+                      </span>
+                      {(timeStr || dateStr) && (
+                        <span style={{ fontSize: 10, color: 'var(--text-light)', flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap' }}>
+                          {dateStr}<br/>{timeStr}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -400,6 +488,15 @@ function SendIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M14 8L2 2l3 6-3 6 12-6z" fill="white"/>
+    </svg>
+  );
+}
+
+function HistoryIcon({ color = 'currentColor' }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="5.5" stroke={color} strokeWidth="1.4"/>
+      <path d="M7 4v3.5l2 1.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
