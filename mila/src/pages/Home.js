@@ -435,6 +435,7 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
         boxShadow: hovered ? 'var(--shadow-card)' : 'var(--shadow-soft)',
         transform: hovered ? 'translateY(-2px)' : 'none',
         position: 'relative',
+        overflow: 'hidden',
       }}
       onClick={onOpen}
     >
@@ -449,8 +450,8 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
           {summary.subject}
         </div>
       )}
-      <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5 }}>
-        {summary.text ? `${summary.text.slice(0, 80)}...` : `${(summary.images || []).length} imagen(es)`}
+      <div style={{ fontSize: 12, color: 'var(--text-light)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+        {summary.text ? summary.text.slice(0, 120) : `${(summary.images || []).length} imagen(es)`}
       </div>
       {summary.tags && summary.tags.length > 0 && (
         <div style={{ marginTop: 10, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
