@@ -70,13 +70,14 @@ export default function Layout({ children }) {
             </svg>
           </button>
           {supabaseEnabled && user && syncError && (
-            <div title={syncError === 'error' ? 'Error al sincronizar con la nube' : 'Sincronizado con la nube'} style={{
-              fontSize: 11, padding: '3px 8px', borderRadius: 8,
-              background: syncError === 'error' ? 'rgba(180,60,60,0.12)' : 'rgba(60,160,80,0.12)',
-              color: syncError === 'error' ? '#a33' : '#2a7',
-              border: `1px solid ${syncError === 'error' ? 'rgba(180,60,60,0.3)' : 'rgba(60,160,80,0.3)'}`,
+            <div style={{
+              fontSize: 11, padding: '3px 8px', borderRadius: 8, maxWidth: 260,
+              background: syncError === 'ok' ? 'rgba(60,160,80,0.12)' : 'rgba(180,60,60,0.12)',
+              color: syncError === 'ok' ? '#2a7' : '#a33',
+              border: `1px solid ${syncError === 'ok' ? 'rgba(60,160,80,0.3)' : 'rgba(180,60,60,0.3)'}`,
+              wordBreak: 'break-all',
             }}>
-              {syncError === 'error' ? '⚠ Sin nube' : '✓ Nube'}
+              {syncError === 'ok' ? '✓ Nube' : `⚠ ${syncError}`}
             </div>
           )}
           <DarkModeToggle dark={darkMode} onToggle={toggleDark} />

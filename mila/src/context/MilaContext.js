@@ -24,7 +24,7 @@ export function MilaProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(!!supabase);
   const [authError, setAuthError] = useState('');
-  const [syncError, setSyncError] = useState(''); // '' | 'error' | 'ok'
+  const [syncError, setSyncError] = useState(''); // '' | 'ok' | error message string
 
   // Per-summary debounce timers
   const upsertTimers = useRef({});
@@ -144,11 +144,13 @@ export function MilaProvider({ children }) {
           .from('summaries')
           .upsert({ id: String(id), user_id: userId, data: payload }, { onConflict: 'id' });
         if (!error) { setSyncError('ok'); return true; }
+        const msg = error.message || error.code || JSON.stringify(error);
         console.error(`[MILA] Supabase upsert error (attempt ${attempt + 1}):`, error);
-        setSyncError('error');
+        setSyncError(msg);
       } catch (e) {
+        const msg = e.message || String(e);
         console.error(`[MILA] Supabase upsert exception (attempt ${attempt + 1}):`, e);
-        setSyncError('error');
+        setSyncError(msg);
       }
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
