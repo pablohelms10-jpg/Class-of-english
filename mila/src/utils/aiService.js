@@ -414,68 +414,80 @@ Reglas: NO repetir temas ya cubiertos. Opciones incorrectas plausibles. Máximo 
 // Generate flashcards specifically for a single concept map node
 export async function generateNodeFlashcardsAI(node, existingCards = []) {
   const nodeText = [node.label, node.summary, node.content, ...(node.bullets || [])].filter(Boolean).join('\n');
-  const existingList = existingCards.length > 0
-    ? `\nFLASHCARDS YA CREADAS (NO repetir):\n${existingCards.map(c => `- ${c.front}`).join('\n')}\n`
+  const existingFronts = existingCards.map(c => c.front);
+  const existingList = existingFronts.length > 0
+    ? `\nFLASHCARDS YA CREADAS (NO repetir ninguna, ni reformularla):\n${existingFronts.map(f => `- ${f}`).join('\n')}\n`
     : '';
 
-  const prompt = `Eres un profesor de medicina. Genera 3-5 flashcards sobre el concepto: "${node.label}".${existingList}
+  const prompt = `Eres un profesor experto. Generá 4-6 flashcards DISTINTAS sobre "${node.label}".${existingList}
 
-CONTENIDO DEL CONCEPTO:
+CONTENIDO:
 ${nodeText}
 
-Respondé SOLO con JSON array:
+INSTRUCCIONES IMPORTANTES:
+- Cubrí TODOS los aspectos posibles: origen, inserción, función/acción, inervación, irrigación, relaciones anatómicas, características especiales, patología, etc.
+- Cada flashcard debe preguntar sobre un aspecto DIFERENTE
+- NO hacer dos preguntas sobre lo mismo con otras palabras
+- Si ya existen flashcards, cubrí SOLO los aspectos que todavía no están cubiertos
+- Si todos los aspectos posibles ya están cubiertos, respondé exactamente: {"allCovered": true}
+
+Respondé SOLO con JSON array (o {"allCovered": true}):
 [
   {
-    "front": "¿Pregunta específica sobre ${node.label}?",
-    "back": "Respuesta concisa",
-    "context": "Dato del concepto que respalda esto"
+    "front": "¿Pregunta sobre UN aspecto específico de ${node.label}?",
+    "back": "Respuesta concisa y completa",
+    "context": "Fragmento del contenido que respalda esto"
   }
-]
-
-Máximo 5 flashcards. Solo sobre este concepto específico.`;
+]`;
 
   const raw = await askClaude(prompt);
+  if (raw.includes('"allCovered"')) return { cards: [], allCovered: true };
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  return JSON.parse(match[0]).map((c, i) => ({
-    ...c,
-    id: Date.now() + i,
-    conceptLabel: node.label,
-  }));
+  return {
+    cards: JSON.parse(match[0]).map((c, i) => ({ ...c, id: Date.now() + i, conceptLabel: node.label })),
+    allCovered: false,
+  };
 }
 
 // Generate multiple-choice questions for a single concept map node
 export async function generateNodeQuestionsAI(node, existingQuestions = []) {
   const nodeText = [node.label, node.summary, node.content, ...(node.bullets || [])].filter(Boolean).join('\n');
-  const existingList = existingQuestions.length > 0
-    ? `\nPREGUNTAS YA CREADAS (NO repetir):\n${existingQuestions.map(q => `- ${q.question}`).join('\n')}\n`
+  const existingTexts = existingQuestions.map(q => q.question);
+  const existingList = existingTexts.length > 0
+    ? `\nPREGUNTAS YA CREADAS (NO repetir ni reformular):\n${existingTexts.map(q => `- ${q}`).join('\n')}\n`
     : '';
 
-  const prompt = `Eres un profesor de medicina. Genera 2-3 preguntas de opción múltiple sobre el concepto: "${node.label}".${existingList}
+  const prompt = `Eres un profesor experto. Generá 3-5 preguntas de opción múltiple DISTINTAS sobre "${node.label}".${existingList}
 
-CONTENIDO DEL CONCEPTO:
+CONTENIDO:
 ${nodeText}
 
-Respondé SOLO con JSON array:
+INSTRUCCIONES IMPORTANTES:
+- Cubrí aspectos DIFERENTES: origen, inserción, función, inervación, irrigación, relaciones, características especiales, etc.
+- Cada pregunta debe evaluar UN aspecto distinto que las demás no cubran
+- NO hacer dos preguntas sobre lo mismo con otras palabras
+- Las opciones incorrectas deben ser plausibles (otras estructuras relacionadas)
+- Si todos los aspectos posibles ya están cubiertos, respondé exactamente: {"allCovered": true}
+
+Respondé SOLO con JSON array (o {"allCovered": true}):
 [
   {
-    "question": "Pregunta sobre ${node.label}",
-    "options": ["A", "B", "C", "D"],
+    "question": "¿Pregunta sobre UN aspecto específico?",
+    "options": ["Correcta", "Incorrecta plausible 1", "Incorrecta plausible 2", "Incorrecta plausible 3"],
     "correct": "Opción correcta exacta",
-    "explanation": "Por qué es correcta"
+    "explanation": "Por qué es correcta, basándose en el contenido"
   }
-]
-
-Máximo 3 preguntas. Solo sobre este concepto específico.`;
+]`;
 
   const raw = await askClaude(prompt);
+  if (raw.includes('"allCovered"')) return { questions: [], allCovered: true };
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Respuesta inválida de la IA');
-  return JSON.parse(match[0]).map((q, i) => ({
-    ...q,
-    id: Date.now() + i,
-    conceptLabel: node.label,
-  }));
+  return {
+    questions: JSON.parse(match[0]).map((q, i) => ({ ...q, id: Date.now() + i, conceptLabel: node.label })),
+    allCovered: false,
+  };
 }
 
 // Immediately distribute images across items without any API call

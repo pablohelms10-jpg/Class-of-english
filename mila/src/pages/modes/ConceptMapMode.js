@@ -61,17 +61,16 @@ function MiniQuestion({ questions }) {
   const question = questions[idx];
   if (!question) return null;
   const options = question.options || [];
+  const isLast = idx === questions.length - 1;
   function prev(e) { e.stopPropagation(); setIdx(i => (i - 1 + questions.length) % questions.length); setSelected(null); }
   function next(e) { e.stopPropagation(); setIdx(i => (i + 1) % questions.length); setSelected(null); }
   return (
     <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, userSelect: 'none' }}>
-      <div style={{
-        borderRadius: 8,
-        border: '1px solid var(--soft-grey)',
-        background: 'var(--ghost-white)',
-        padding: '9px 10px',
-      }}>
-        <div style={{ fontSize: 10, color: 'var(--text-light)', marginBottom: 5, fontWeight: 500 }}>Pregunta</div>
+      <div style={{ borderRadius: 8, border: '1px solid var(--soft-grey)', background: 'var(--ghost-white)', padding: '9px 10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-light)', fontWeight: 500 }}>Pregunta</span>
+          {questions.length > 1 && <span style={{ fontSize: 9, color: 'var(--text-light)' }}>{idx + 1} / {questions.length}</span>}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5, marginBottom: 7 }}>{question.question}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {options.map((opt, i) => {
@@ -79,8 +78,8 @@ function MiniQuestion({ questions }) {
             const isSelected = selected === opt;
             let bg = 'transparent', borderColor = 'var(--soft-grey)', color = 'var(--text-dark)';
             if (selected) {
-              if (isCorrect) { bg = '#d4edda'; borderColor = '#7BAE7F'; color = '#2d6a33'; }
-              else if (isSelected) { bg = '#fde8e8'; borderColor = '#e57373'; color = '#b71c1c'; }
+              if (isCorrect) { bg = 'rgba(123,174,127,0.18)'; borderColor = '#7BAE7F'; color = '#2d6a33'; }
+              else if (isSelected) { bg = 'rgba(229,115,115,0.15)'; borderColor = '#e57373'; color = '#b71c1c'; }
             }
             return (
               <button key={i} onClick={() => { if (!selected) setSelected(opt); }}
@@ -96,10 +95,23 @@ function MiniQuestion({ questions }) {
           </div>
         )}
       </div>
+      {/* Navigation — always show if multiple questions; after answering show prominent Next button */}
       {questions.length > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5 }}>
           <button onClick={prev} style={miniNavBtn}>‹</button>
-          <span style={{ fontSize: 9, color: 'var(--text-light)' }}>{idx + 1} / {questions.length}</span>
+          {selected ? (
+            <button onClick={next} style={{
+              flex: 1, padding: '5px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+              border: '1px solid var(--driftwood)', background: 'var(--driftwood)',
+              color: 'white', cursor: 'pointer',
+            }}>
+              {isLast ? 'Volver al inicio →' : 'Siguiente →'}
+            </button>
+          ) : (
+            <span style={{ flex: 1, textAlign: 'center', fontSize: 9, color: 'var(--text-light)' }}>
+              Respondé para continuar
+            </span>
+          )}
           <button onClick={next} style={miniNavBtn}>›</button>
         </div>
       )}
@@ -490,8 +502,13 @@ export default function ConceptMapMode({ summary }) {
     setNodeGenerating(prev => ({ ...prev, [node.id]: 'flashcards' }));
     try {
       const existing = (summary.flashcards || []).filter(f => f.conceptLabel === node.label);
-      const newCards = await generateNodeFlashcardsAI(node, existing);
-      const merged = [...(summary.flashcards || []), ...newCards];
+      const result = await generateNodeFlashcardsAI(node, existing);
+      if (result.allCovered) {
+        setNodeGenerating(prev => ({ ...prev, [node.id]: 'cards_done' }));
+        setTimeout(() => setNodeGenerating(prev => ({ ...prev, [node.id]: null })), 3000);
+        return;
+      }
+      const merged = [...(summary.flashcards || []), ...result.cards];
       updateSummary(summary.id, { flashcards: merged });
     } catch { /* silent */ }
     setNodeGenerating(prev => ({ ...prev, [node.id]: null }));
@@ -555,8 +572,13 @@ export default function ConceptMapMode({ summary }) {
     setNodeGenerating(prev => ({ ...prev, [node.id]: 'questions' }));
     try {
       const existing = (summary.questions || []).filter(q => q.conceptLabel === node.label);
-      const newQs = await generateNodeQuestionsAI(node, existing);
-      const merged = [...(summary.questions || []), ...newQs];
+      const result = await generateNodeQuestionsAI(node, existing);
+      if (result.allCovered) {
+        setNodeGenerating(prev => ({ ...prev, [node.id]: 'qs_done' }));
+        setTimeout(() => setNodeGenerating(prev => ({ ...prev, [node.id]: null })), 3000);
+        return;
+      }
+      const merged = [...(summary.questions || []), ...result.questions];
       updateSummary(summary.id, { questions: merged });
     } catch { /* silent */ }
     setNodeGenerating(prev => ({ ...prev, [node.id]: null }));
@@ -798,8 +820,8 @@ export default function ConceptMapMode({ summary }) {
                             transition: 'opacity 0.15s',
                           }}
                         >
-                          {genState === 'flashcards' ? '⟳' : '＋'}
-                          {nodeCardCount > 0 ? `Flashcards (${nodeCardCount})` : 'Flashcards'}
+                          {genState === 'flashcards' ? '⟳' : genState === 'cards_done' ? '✓' : '＋'}
+                          {genState === 'cards_done' ? 'Todo cubierto' : nodeCardCount > 0 ? `Flashcards (${nodeCardCount})` : 'Flashcards'}
                         </button>
                         <button
                           onClick={e => { e.stopPropagation(); generateNodeQs(node); }}
@@ -815,8 +837,8 @@ export default function ConceptMapMode({ summary }) {
                             transition: 'opacity 0.15s',
                           }}
                         >
-                          {genState === 'questions' ? '⟳' : '＋'}
-                          {nodeQCount > 0 ? `Preguntas (${nodeQCount})` : 'Preguntas'}
+                          {genState === 'questions' ? '⟳' : genState === 'qs_done' ? '✓' : '＋'}
+                          {genState === 'qs_done' ? 'Todo cubierto' : nodeQCount > 0 ? `Preguntas (${nodeQCount})` : 'Preguntas'}
                         </button>
                       </div>
 
