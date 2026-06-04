@@ -176,110 +176,162 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
   return data.content[0].text;
 }
 
-// Global image assignment via OCR-first matching.
-//
-// Architecture: two-stage pipeline.
-// Stage 1 — Claude reads each image and reports the OCR text it sees.
-//            No assignment logic. Just transcription.
-// Stage 2 — JavaScript does the matching deterministically:
-//            exact string inclusion (case-insensitive) between OCR and node label.
-//            LLM is never trusted for the assignment decision itself.
+// Global image assignment — two-stage pipeline.
+// Stage 1: Claude reads each image (HIGH-RES, batches of 4) and extracts text
+//          with hierarchy: title (largest text) → subtitles → other text.
+// Stage 2: Deterministic JS matching — title match wins (score 40),
+//          then subtitle (score 18), then body text (score 6).
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
-  // Cap at 12 images. 20 images + OCR text exceeds the 2000-token response
-  // budget and causes JSON truncation. 12 is reliable and covers most PDFs.
-  const selected = spreadImages(images, Math.min(images.length, 12));
+  const selected = spreadImages(images, Math.min(images.length, 20));
+  console.log('[MILA matchImages] Procesando', selected.length, 'imágenes para', topics.length, 'nodos');
 
-  console.group('[MILA matchImages] Stage 1 — OCR');
-  console.log('Imágenes enviadas a Claude:', selected.length);
-  console.log('Nodos a asignar:', topics.map((t, i) => `${i}. ${t}`));
-  console.groupEnd();
+  // Stage 1: OCR in batches of 4 with high-res images
+  const BATCH = 4;
+  const ocrMap = {}; // si → { title, subtitles[], other }
 
-  // Stage 1: ask Claude ONLY to transcribe text in each image, no assignment
-  const ocrPrompt = `Sos un sistema OCR. Para cada imagen, transcribí TODO el texto visible: títulos, subtítulos, etiquetas, nombres anatómicos, leyendas, texto de flechas.
-No hagas ninguna asignación ni interpretación. Solo copiá el texto que ves.
+  for (let i = 0; i < selected.length; i += BATCH) {
+    const batch = selected.slice(i, i + BATCH);
+    const batchContent = [];
 
-Respondé con JSON exactamente así (${selected.length} objetos, uno por imagen, en orden):
-{"ocr": [
-  {"idx": 0, "text": "todo el texto de la imagen 0"},
-  {"idx": 1, "text": "todo el texto de la imagen 1"}
-]}
-
-Si una imagen no tiene texto legible, usá "" para ese campo.
-Incluí los ${selected.length} objetos completos.`;
-
-  let ocrResults = [];
-  try {
-    // Use 4000 tokens — 12 images × ~3 lines of OCR each fits comfortably
-    const raw = await askClaude(ocrPrompt, selected, 4000);
-    console.log('[MILA matchImages] Respuesta OCR cruda:\n', raw);
-    const jsonMatch = raw.match(/\{[\s\S]*?\}/s) || raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+    for (const img of batch) {
       try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        ocrResults = parsed.ocr || [];
-      } catch {
-        // JSON may be truncated — extract any complete {"idx":N,"text":"..."} objects
-        const entries = [...raw.matchAll(/\{\s*"idx"\s*:\s*(\d+)\s*,\s*"text"\s*:\s*"([^"]*)"/g)];
-        ocrResults = entries.map(m => ({ idx: parseInt(m[1]), text: m[2] }));
-        console.warn('[MILA matchImages] JSON truncado, recuperados', ocrResults.length, 'de', selected.length, 'entradas');
-      }
+        const compressed = await compressImageHighRes(img.src); // 1000px for readable text
+        if (!compressed) continue;
+        const data = compressed.replace(/^data:[^;]+;base64,/, '');
+        if (data.length > 5_000_000) continue;
+        batchContent.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } });
+      } catch { /* skip */ }
     }
-  } catch (err) {
-    console.error('[MILA matchImages] Error en Stage 1 (OCR):', err);
-    return topics.map(() => null);
+    if (batchContent.length === 0) continue;
+
+    const sectionList = batch.map((_, j) =>
+      `{"idx": ${i + j}, "title": "TEXTO MÁS GRANDE O PRINCIPAL DE LA IMAGEN", "subtitles": ["subtítulo 1", "subtítulo 2"], "other": "resto del texto"}`
+    ).join(',\n  ');
+
+    batchContent.push({
+      type: 'text',
+      text: `Estas son ${batch.length} páginas de apuntes universitarios/médicos (índices ${i} a ${i + batch.length - 1}).
+
+Para CADA imagen extraé el texto con jerarquía:
+- "title": el texto más grande/prominente (título principal de la página). Ej: "HÚMERO", "MÚSCULOS DEL BRAZO", "NERVIO CUBITAL"
+- "subtitles": array de subtítulos o secciones secundarias importantes (nombres de estructuras, regiones, etc.)
+- "other": cualquier otro texto (etiquetas de flechas, notas al pie, etc.)
+
+IMPORTANTE: Copiá el texto EXACTAMENTE como aparece, respetando mayúsculas y tildes.
+
+Respondé SOLO con este JSON (${batch.length} objetos):
+{"ocr": [
+  ${sectionList}
+]}`,
+    });
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 55000);
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: batchContent }],
+        }),
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.content[0].text;
+        try {
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            (parsed.ocr || []).forEach(entry => {
+              ocrMap[entry.idx] = {
+                title: entry.title || '',
+                subtitles: Array.isArray(entry.subtitles) ? entry.subtitles : [],
+                other: entry.other || '',
+              };
+              console.log(`  [img ${entry.idx}] title="${entry.title}" | subtitles=[${(entry.subtitles || []).join(', ')}]`);
+            });
+          }
+        } catch {
+          // Fallback: extract title fields individually
+          const entries = [...raw.matchAll(/"idx"\s*:\s*(\d+)[^}]*?"title"\s*:\s*"([^"]*)"/g)];
+          entries.forEach(m => {
+            ocrMap[parseInt(m[1])] = { title: m[2], subtitles: [], other: '' };
+            console.log(`  [img ${m[1]}] title="${m[2]}" (fallback)`);
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[MILA matchImages] Error batch ${i}:`, err.message);
+    }
   }
 
-  if (ocrResults.length === 0) {
-    console.error('[MILA matchImages] OCR devolvió 0 entradas — abortando');
-    return topics.map(() => null);
+  console.log('[MILA matchImages] OCR done:', Object.keys(ocrMap).length, 'imgs con texto');
+
+  // Stage 2: hierarchical deterministic matching
+  function norm(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   }
 
-  // Stage 2: deterministic JavaScript matching
-  console.group('[MILA matchImages] Stage 2 — Matching determinístico');
-
-  // Build map: imageIdx → OCR text (normalise accents + lowercase)
-  function normalise(s) {
-    return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  function overlapRatio(haystack, needle) {
+    const h = norm(haystack);
+    const n = norm(needle);
+    if (!h || !n) return 0;
+    if (h.includes(n)) return 1.0;
+    const words = n.split(/\s+/).filter(w => w.length > 2);
+    if (words.length === 0) return 0;
+    const matched = words.filter(w => h.includes(w));
+    return matched.length / words.length;
   }
-  const ocrMap = {};
-  ocrResults.forEach(r => { ocrMap[r.idx] = normalise(r.text); });
 
-  selected.forEach((img, si) => {
-    const ocr = ocrMap[si] || '(sin texto)';
-    console.log(`Imagen #${si} (origIdx ${img._origIdx}): "${ocr.slice(0, 120)}"`);
-  });
+  function scoreImageForTopic(imgOcr, topic) {
+    if (!imgOcr) return 0;
 
-  // Score: how well does an image's OCR match a topic label?
-  // Score 3: OCR contains the full topic label (exact)
-  // Score 2: all significant words of topic (>3 chars) appear in OCR
-  // Score 1: majority of significant words appear in OCR
-  // Score 0: no match
-  function score(ocrText, topicLabel) {
-    const ocr = normalise(ocrText);
-    const topic = normalise(topicLabel.trim());
-    if (!ocr || !topic) return 0;
-    if (ocr.includes(topic)) return 3;
-    const words = topic.split(/\s+/).filter(w => w.length > 3);
-    if (words.length === 0) return ocr.includes(topic) ? 3 : 0;
-    const matched = words.filter(w => ocr.includes(w));
-    if (matched.length === words.length) return 2;
-    if (matched.length >= Math.ceil(words.length * 0.6)) return 1;
+    // Title — highest priority
+    const tRatio = overlapRatio(imgOcr.title, topic);
+    if (tRatio >= 1.0) return 40;
+    if (tRatio >= 0.75) return 32;
+    if (tRatio >= 0.5)  return 22;
+    if (tRatio >= 0.3)  return 14;
+
+    // Subtitles — second priority
+    let bestSub = 0;
+    for (const sub of imgOcr.subtitles) {
+      const r = overlapRatio(sub, topic);
+      if (r > bestSub) bestSub = r;
+    }
+    if (bestSub >= 1.0) return 18;
+    if (bestSub >= 0.7) return 13;
+    if (bestSub >= 0.5) return 9;
+
+    // Other text — lowest priority
+    const oRatio = overlapRatio(imgOcr.other, topic);
+    if (oRatio >= 1.0) return 6;
+    if (oRatio >= 0.5) return 3;
+
     return 0;
   }
 
-  // Build candidates: (image, topic, score) for every pair with score > 0
   const candidates = [];
   selected.forEach((img, si) => {
-    const ocr = ocrMap[si] || '';
+    const imgOcr = ocrMap[si];
     topics.forEach((topic, ti) => {
-      const s = score(ocr, topic);
+      const s = scoreImageForTopic(imgOcr, topic);
       if (s > 0) candidates.push({ si, origIdx: img._origIdx, topicIdx: ti, score: s });
     });
   });
 
-  // Greedy assignment: highest score first, each image and topic used once
   candidates.sort((a, b) => b.score - a.score || a.si - b.si);
 
   const usedImages = new Set();
@@ -291,15 +343,10 @@ Incluí los ${selected.length} objetos completos.`;
     result[topicIdx] = origIdx;
     usedImages.add(si);
     usedTopics.add(topicIdx);
-    console.log(`✅ Nodo ${topicIdx} "${topics[topicIdx]}" ← imagen #${si} (score ${s}, origIdx ${origIdx})`);
+    console.log(`✅ "${topics[topicIdx]}" ← img #${si} (origIdx ${origIdx}, score ${s})`);
   });
 
-  topics.forEach((topic, i) => {
-    if (result[i] === null) console.log(`❌ Nodo ${i} "${topic}" → sin imagen`);
-  });
-
-  console.log('[MILA matchImages] Resultado final:', result);
-  console.groupEnd();
+  topics.forEach((t, i) => { if (result[i] === null) console.log(`❌ Sin imagen: "${t}"`); });
   return result;
 }
 
