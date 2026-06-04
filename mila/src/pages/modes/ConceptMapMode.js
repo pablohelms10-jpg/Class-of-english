@@ -173,6 +173,20 @@ export default function ConceptMapMode({ summary }) {
       return next;
     });
   }
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [hintVisible, setHintVisible] = useState(false);
+
+  useEffect(() => {
+    if (isFullscreen) {
+      setHintVisible(true);
+      const t = setTimeout(() => setHintVisible(false), 3000);
+      return () => clearTimeout(t);
+    } else {
+      setHintVisible(false);
+      setPanelCollapsed(false);
+    }
+  }, [isFullscreen]);
+
   const [nodePanel, setNodePanel] = useState(null); // { node, tab: 'flashcards'|'questions' }
 
   const panRef = useRef(pan);
@@ -634,73 +648,87 @@ export default function ConceptMapMode({ summary }) {
   const mapContent = (
     <div style={{ display: 'flex', flexDirection: 'column', height: isFullscreen ? '100%' : undefined }}>
 
-      {/* Progress bar */}
-      <div style={{ marginBottom: 8, flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
-            {masteredCount} / {totalCount} conceptos dominados
-          </span>
-        </div>
-        <div style={{ height: 4, borderRadius: 2, background: 'var(--whisper-grey)', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%',
-            width: `${progressPct}%`,
-            background: progressPct === 100
-              ? '#7BAE7F'
-              : 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))',
-            borderRadius: 2,
-            transition: 'width 0.4s ease',
-          }} />
-        </div>
-      </div>
+      {/* Top panel: progress + toolbar — collapsible in fullscreen */}
+      {!(isFullscreen && panelCollapsed) && (
+        <>
+          {/* Progress bar */}
+          <div style={{ marginBottom: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-light)' }}>
+                {masteredCount} / {totalCount} conceptos dominados
+              </span>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--whisper-grey)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${progressPct}%`,
+                background: progressPct === 100
+                  ? '#7BAE7F'
+                  : 'linear-gradient(90deg, var(--ash-plum), var(--driftwood))',
+                borderRadius: 2,
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+          </div>
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0, gap: 6, flexWrap: 'nowrap' }}>
-        <p style={{ fontSize: 11, color: 'var(--text-light)', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {isFullscreen
-            ? (mapData.title || 'Mapa conceptual')
-            : 'Pellizca · arrastrá · pantalla completa ⛶'}
-        </p>
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
-          <button onClick={() => zoom(1.2)} style={toolBtnStyle} title="Acercar">+</button>
-          <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 32, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
-          <button onClick={() => zoom(1 / 1.2)} style={toolBtnStyle} title="Alejar">−</button>
-          <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
-          {loadedImages.length > 0 && (
-            <button
-              onClick={reassignImages}
-              disabled={reassigning}
-              title="Reasignar imágenes"
-              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: reassigning ? 0.5 : 1 }}
-            >
-              {reassigning ? '⟳' : '🖼'}
-            </button>
-          )}
-          <button
-            onClick={expandMap}
-            disabled={expanding}
-            title="Agregar más nodos con información faltante"
-            style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: expanding ? 0.5 : 1 }}
-          >
-            {expanding ? '⟳' : '＋'}
-          </button>
-          <button
-            onClick={cycleBg}
-            title={bgStyle === 'none' ? 'Fondo liso — click para puntos' : bgStyle === 'dots' ? 'Puntos — click para cuadrícula' : 'Cuadrícula — click para liso'}
-            style={{ ...toolBtnStyle, fontSize: 13, width: 32, padding: 0 }}
-          >
-            {bgStyle === 'none' ? '□' : bgStyle === 'dots' ? '⋯' : '⊞'}
-          </button>
-          <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
-          <button
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'}
-            style={{ ...toolBtnStyle, fontSize: 17, width: 32, padding: 0 }}
-          >
-            {isFullscreen ? '⛶' : '⛶'}
-          </button>
-        </div>
-      </div>
+          {/* Toolbar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexShrink: 0, gap: 6, flexWrap: 'nowrap' }}>
+            <p style={{ fontSize: 11, color: 'var(--text-light)', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isFullscreen
+                ? (mapData.title || 'Mapa conceptual')
+                : 'Pellizca · arrastrá · pantalla completa ⛶'}
+            </p>
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
+              <button onClick={() => zoom(1.2)} style={toolBtnStyle} title="Acercar">+</button>
+              <span style={{ fontSize: 11, color: 'var(--text-light)', minWidth: 32, textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+              <button onClick={() => zoom(1 / 1.2)} style={toolBtnStyle} title="Alejar">−</button>
+              <button onClick={() => { setScale(0.75); setPan({ x: 20, y: 20 }); }} style={toolBtnStyle} title="Restablecer vista">⊙</button>
+              {loadedImages.length > 0 && (
+                <button
+                  onClick={reassignImages}
+                  disabled={reassigning}
+                  title="Reasignar imágenes"
+                  style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: reassigning ? 0.5 : 1 }}
+                >
+                  {reassigning ? '⟳' : '🖼'}
+                </button>
+              )}
+              <button
+                onClick={expandMap}
+                disabled={expanding}
+                title="Agregar más nodos con información faltante"
+                style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: expanding ? 0.5 : 1 }}
+              >
+                {expanding ? '⟳' : '＋'}
+              </button>
+              <button
+                onClick={cycleBg}
+                title={bgStyle === 'none' ? 'Fondo liso — click para puntos' : bgStyle === 'dots' ? 'Puntos — click para cuadrícula' : 'Cuadrícula — click para liso'}
+                style={{ ...toolBtnStyle, fontSize: 13, width: 32, padding: 0 }}
+              >
+                {bgStyle === 'none' ? '□' : bgStyle === 'dots' ? '⋯' : '⊞'}
+              </button>
+              <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
+              {isFullscreen && (
+                <button
+                  onClick={() => setPanelCollapsed(true)}
+                  title="Ocultar panel"
+                  style={{ ...toolBtnStyle, fontSize: 13, width: 32, padding: 0 }}
+                >
+                  ∧
+                </button>
+              )}
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                style={{ ...toolBtnStyle, fontSize: 17, width: 32, padding: 0 }}
+              >
+                {isFullscreen ? '⛶' : '⛶'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Canvas — touch-action:none forced on all children to prevent iOS scroll override */}
       <style>{`[data-mila-map],[data-mila-map] *{touch-action:none!important;-webkit-user-select:none;user-select:none}`}</style>
@@ -947,12 +975,37 @@ export default function ConceptMapMode({ summary }) {
           <button onClick={() => zoom(0.8)} style={overlayBtnStyle} title="Alejar">−</button>
         </div>
 
-        {/* Fullscreen escape hint */}
+        {/* Fullscreen hint — auto-hides after 3s */}
         {isFullscreen && (
-          <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 100, pointerEvents: 'none' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--ghost-white)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--whisper-grey)', opacity: 0.7 }}>
+          <div style={{
+            position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 100, pointerEvents: 'none',
+            transition: 'opacity 0.8s ease',
+            opacity: hintVisible ? 0.7 : 0,
+          }}>
+            <span style={{ fontSize: 11, color: 'var(--text-light)', background: 'var(--ghost-white)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--whisper-grey)', whiteSpace: 'nowrap' }}>
               Toca ✕ para salir · pellizca para zoom · arrastrá para mover
             </span>
+          </div>
+        )}
+
+        {/* Show-panel button when top panel is collapsed in fullscreen */}
+        {isFullscreen && panelCollapsed && (
+          <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 110, display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setPanelCollapsed(false)}
+              title="Mostrar panel"
+              style={{ ...overlayBtnStyle, fontSize: 13, width: 36, height: 30, borderRadius: 20, padding: '0 12px', width: 'auto' }}
+            >
+              ∨ Panel
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              title="Salir de pantalla completa"
+              style={{ ...overlayBtnStyle, fontSize: 13, width: 36, height: 30, borderRadius: 20 }}
+            >
+              ✕
+            </button>
           </div>
         )}
       </div>
