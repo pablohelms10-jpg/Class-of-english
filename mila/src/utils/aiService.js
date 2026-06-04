@@ -154,8 +154,11 @@ async function buildContent(prompt, images = []) {
 async function askClaude(prompt, images = [], maxTokens = 3000) {
   if (!API_KEY) throw new Error('No API key configurada');
   const content = images.length > 0 ? await buildContent(prompt, images) : prompt;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000); // 60 s timeout
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': API_KEY,
@@ -168,6 +171,7 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
       messages: [{ role: 'user', content }],
     }),
   });
+  clearTimeout(timer);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error?.message || `Error ${res.status}`);
@@ -632,7 +636,15 @@ Reglas:
 - CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO. NUNCA repitas el nombre del archivo como label de múltiples nodos`;
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const raw = await askClaude(prompt, selectedImages, 4000);
+    let raw;
+    try {
+      raw = await askClaude(prompt, selectedImages, 4000);
+    } catch (err) {
+      // Timeout or network error — don't retry, just fail fast (avoid extra charges)
+      if (err.name === 'AbortError' || err.message?.includes('abort') || err.message?.includes('network')) throw err;
+      if (attempt < 2) continue;
+      throw err;
+    }
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) { if (attempt < 2) continue; throw new Error('Respuesta inválida de la IA'); }
     let result;
