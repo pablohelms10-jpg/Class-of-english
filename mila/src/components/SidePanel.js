@@ -474,7 +474,7 @@ export default function SidePanel({ open, onClose }) {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 32px' }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-mid)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
-                Tema personalizado
+                Temas personalizados
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {THEMES.map(theme => {
