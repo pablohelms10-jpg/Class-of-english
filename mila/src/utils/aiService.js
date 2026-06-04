@@ -76,112 +76,125 @@ async function askClaude(prompt, images = [], maxTokens = 3000) {
 }
 
 // Global image assignment via OCR-first matching.
-// Rule: text written IN the image is the ONLY valid signal.
-// Visual similarity must never override OCR text. null > wrong image.
+//
+// Architecture: two-stage pipeline.
+// Stage 1 — Claude reads each image and reports the OCR text it sees.
+//            No assignment logic. Just transcription.
+// Stage 2 — JavaScript does the matching deterministically:
+//            exact string inclusion (case-insensitive) between OCR and node label.
+//            LLM is never trusted for the assignment decision itself.
 async function matchImages(topics, images) {
   if (!images || images.length === 0) return topics.map(() => null);
 
-  const selected = spreadImages(images, Math.min(images.length, 12));
+  // Use ALL images up to 20, not just 12 spread evenly.
+  // Spreading causes many labeled slides to be skipped entirely.
+  const selected = spreadImages(images, Math.min(images.length, 20));
 
-  console.group('[MILA matchImages] Iniciando asignación');
-  console.log('Imágenes seleccionadas:', selected.length, '— Nodos:', topics.length);
-  console.log('Nodos:', topics.map((t, i) => `${i}. ${t}`));
+  console.group('[MILA matchImages] Stage 1 — OCR');
+  console.log('Imágenes enviadas a Claude:', selected.length);
+  console.log('Nodos a asignar:', topics.map((t, i) => `${i}. ${t}`));
   console.groupEnd();
 
-  const prompt = `Sos un sistema OCR especializado en diapositivas médicas. Tu única tarea es leer el texto impreso en cada imagen y compararlo con una lista de conceptos.
+  // Stage 1: ask Claude ONLY to transcribe text in each image, no assignment
+  const ocrPrompt = `Sos un sistema OCR. Para cada imagen, transcribí TODO el texto visible: títulos, subtítulos, etiquetas, nombres anatómicos, leyendas, texto de flechas.
+No hagas ninguna asignación ni interpretación. Solo copiá el texto que ves.
 
-REGLA ABSOLUTA: El texto visible en la imagen es la ÚNICA señal válida para la asignación.
-- PROHIBIDO usar similitud visual, anatomía relacionada, o inferencia contextual.
-- Si la imagen no contiene texto que coincida con un concepto → null obligatorio.
-- "Relacionado" no es suficiente. Solo coincidencia textual exacta o casi exacta.
+Respondé con JSON exactamente así (${selected.length} objetos, uno por imagen):
+{"ocr": [
+  {"idx": 0, "text": "todo el texto de la imagen 0"},
+  {"idx": 1, "text": "todo el texto de la imagen 1"}
+]}
 
-CONCEPTOS (${topics.length} total):
-${topics.map((t, i) => `${i}. "${t}"`).join('\n')}
+Si una imagen no tiene texto legible, usá "" para ese campo.
+Incluí el array completo con los ${selected.length} índices.`;
 
-IMÁGENES (${selected.length} total, índices 0–${selected.length - 1}):
-Para cada imagen hacé esto:
-  A. Leé TODO el texto que aparezca: títulos, subtítulos, etiquetas, flechas, leyendas.
-  B. Buscá si ese texto nombra EXACTAMENTE uno de los conceptos de arriba.
-  C. Si sí → asignala a ese concepto. Si no → null.
-
-EJEMPLOS DE APLICACIÓN CORRECTA:
-- Imagen con texto "ARTICULACIÓN TEMPOROMANDIBULAR" → solo puede ir al concepto "Articulación Temporomandibular". Si ese concepto no existe en la lista → null.
-- Imagen con texto "Hueso Cigomático" → solo puede ir al concepto "Hueso Cigomático". NUNCA a "Articulación Temporomandibular" aunque sean vecinos anatómicos.
-- Imagen sin texto legible → null siempre.
-- Imagen con texto irrelevante (número de página, pie de foto genérico) → null.
-
-UNICIDAD: cada imagen puede asignarse como máximo a UN concepto. Si dos conceptos coinciden con la misma imagen, elegí el más exacto. El otro recibe null.
-
-FORMATO DE RESPUESTA — devolvé un JSON con dos campos:
-1. "images": array de ${selected.length} objetos, uno por imagen, en orden de índice:
-   { "idx": 0, "ocr": "todo el texto detectado en la imagen", "match": número de concepto o null, "reason": "por qué coincide o por qué null" }
-2. "assignments": array de ${topics.length} valores (índice de imagen o null), uno por concepto.
-
-Ejemplo con 3 imágenes y 4 conceptos:
-{
-  "images": [
-    { "idx": 0, "ocr": "Articulación Temporomandibular", "match": 2, "reason": "texto exacto coincide con concepto 2" },
-    { "idx": 1, "ocr": "sin texto claro", "match": null, "reason": "no hay texto legible" },
-    { "idx": 2, "ocr": "Hueso Cigomático — cara lateral", "match": 0, "reason": "texto menciona concepto 0 explícitamente" }
-  ],
-  "assignments": [2, null, null, 0]
-}`;
-
+  let ocrResults = [];
   try {
-    const raw = await askClaude(prompt, selected);
-    console.log('[MILA matchImages] Respuesta cruda de Claude:\n', raw);
-
+    const raw = await askClaude(ocrPrompt, selected, 2000);
+    console.log('[MILA matchImages] Respuesta OCR cruda:\n', raw);
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('no json');
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    // Log per-image OCR debug
-    if (parsed.images) {
-      console.group('[MILA matchImages] OCR por imagen');
-      parsed.images.forEach(img => {
-        const score = img.match != null ? '✅ MATCH' : '❌ null';
-        console.group(`Imagen #${img.idx} → ${score}`);
-        console.log('OCR detectado:', img.ocr || '(vacío)');
-        console.log('Concepto asignado:', img.match != null ? `${img.match}. "${topics[img.match]}"` : 'null');
-        console.log('Razón:', img.reason || '—');
-        console.groupEnd();
-      });
-      console.groupEnd();
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      ocrResults = parsed.ocr || [];
     }
-
-    const assignments = parsed.assignments || [];
-
-    // Log per-concept assignment
-    console.group('[MILA matchImages] Asignación por nodo');
-    topics.forEach((topic, i) => {
-      const si = assignments[i];
-      const origIdx = si != null ? selected[si]?._origIdx : null;
-      console.log(`Nodo ${i} "${topic}" → imagen ${si != null ? si : 'null'} (origIdx: ${origIdx ?? 'null'})`);
-    });
-    console.groupEnd();
-
-    // Enforce uniqueness: if the same image index is used twice, keep only the first
-    const usedIndices = new Set();
-    const result = topics.map((_, i) => {
-      const si = assignments[i];
-      if (si == null) return null;
-      const idx = typeof si === 'number' ? si : parseInt(si);
-      if (isNaN(idx) || idx < 0 || idx >= selected.length) return null;
-      if (usedIndices.has(idx)) {
-        console.warn(`[MILA matchImages] Imagen ${idx} duplicada para nodo ${i} "${topics[i]}" — descartada`);
-        return null;
-      }
-      usedIndices.add(idx);
-      return selected[idx]?._origIdx ?? null;
-    });
-
-    console.log('[MILA matchImages] Resultado final (origIdx por nodo):', result);
-    return result;
   } catch (err) {
-    console.error('[MILA matchImages] Error en el pipeline:', err);
-    // On error return all nulls — never force-distribute wrong images
+    console.error('[MILA matchImages] Error en Stage 1 (OCR):', err);
     return topics.map(() => null);
   }
+
+  // Stage 2: deterministic JavaScript matching
+  // For each image, check which topics are mentioned in its OCR text
+  console.group('[MILA matchImages] Stage 2 — Matching determinístico');
+
+  // Build map: imageIdx → OCR text
+  const ocrMap = {};
+  ocrResults.forEach(r => { ocrMap[r.idx] = (r.text || '').toLowerCase(); });
+
+  // Log OCR per image
+  selected.forEach((img, si) => {
+    const ocr = ocrMap[si] || '(sin texto)';
+    console.log(`Imagen #${si} (origIdx ${img._origIdx}): "${ocr.slice(0, 120)}"`);
+  });
+
+  // Score: for each (image, topic) pair, compute match strength
+  // Score 3: OCR contains the full topic label (strongest)
+  // Score 2: topic label contains most words from OCR title
+  // Score 0: no match
+  function score(ocrText, topicLabel) {
+    const ocr = ocrText.toLowerCase();
+    const topic = topicLabel.toLowerCase().trim();
+    if (!ocr || !topic) return 0;
+    if (ocr.includes(topic)) return 3;
+    // Check if all significant words of topic appear in OCR
+    const words = topic.split(/\s+/).filter(w => w.length > 3);
+    if (words.length > 0 && words.every(w => ocr.includes(w))) return 2;
+    return 0;
+  }
+
+  // For each image, find the best-matching topic
+  // imgBestTopic[si] = { topicIdx, score }
+  const imgBestTopic = selected.map((_, si) => {
+    const ocr = ocrMap[si] || '';
+    let best = { topicIdx: null, score: 0 };
+    topics.forEach((topic, ti) => {
+      const s = score(ocr, topic);
+      if (s > best.score) best = { topicIdx: ti, score: s };
+    });
+    return best;
+  });
+
+  // Assign: each topic gets the highest-scoring image that matches it,
+  // and each image can only be used once (greedy by score, highest first)
+  const candidates = [];
+  selected.forEach((img, si) => {
+    const { topicIdx, score: s } = imgBestTopic[si];
+    if (topicIdx !== null && s > 0) {
+      candidates.push({ si, origIdx: img._origIdx, topicIdx, score: s });
+    }
+  });
+
+  // Sort by score desc so higher-confidence matches claim images first
+  candidates.sort((a, b) => b.score - a.score);
+
+  const usedImages = new Set();
+  const usedTopics = new Set();
+  const result = topics.map(() => null);
+
+  candidates.forEach(({ si, origIdx, topicIdx, score: s }) => {
+    if (usedImages.has(si) || usedTopics.has(topicIdx)) return;
+    result[topicIdx] = origIdx;
+    usedImages.add(si);
+    usedTopics.add(topicIdx);
+    console.log(`✅ Nodo ${topicIdx} "${topics[topicIdx]}" ← imagen #${si} (score ${s}, origIdx ${origIdx})`);
+  });
+
+  topics.forEach((topic, i) => {
+    if (result[i] === null) console.log(`❌ Nodo ${i} "${topic}" → sin imagen`);
+  });
+
+  console.log('[MILA matchImages] Resultado final:', result);
+  console.groupEnd();
+  return result;
 }
 
 // Spread available images across topics when AI matching fails
