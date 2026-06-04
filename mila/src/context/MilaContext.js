@@ -10,6 +10,10 @@ function loadFromStorage(key, fallback) {
   } catch { return fallback; }
 }
 
+function saveToStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota exceeded */ }
+}
+
 export function MilaProvider({ children }) {
   const [summaries, setSummaries] = useState(() => loadFromStorage('mila_summaries', []));
   const [activeSummary, setActiveSummary] = useState(null);
@@ -21,12 +25,17 @@ export function MilaProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(!!supabase);
   const [authError, setAuthError] = useState('');
 
-  // Per-summary debounce timers: Map of summaryId -> timeoutId
+  // Per-summary debounce timers
   const upsertTimers = useRef({});
+
+  // ── Persist summaries to localStorage (effect, not inside state updater) ─
+  useEffect(() => {
+    saveToStorage('mila_summaries', summaries);
+  }, [summaries]);
 
   // ── Persist dark mode ──────────────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('mila_dark', JSON.stringify(darkMode));
+    saveToStorage('mila_dark', darkMode);
     if (darkMode) document.body.classList.add('dark');
     else document.body.classList.remove('dark');
   }, [darkMode]);
@@ -54,38 +63,45 @@ export function MilaProvider({ children }) {
 
   // ── Load summaries from Supabase ───────────────────────────────────────
   async function loadCloudSummaries(userId) {
-    const { data, error } = await supabase
-      .from('summaries')
-      .select('id, data')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('summaries')
+        .select('id, data')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (error) { console.error('[MILA] Supabase load error:', error); return; }
+      if (error) { console.error('[MILA] Supabase load error:', error); return; }
 
-    if (data && data.length > 0) {
-      const cloud = data.map(row => row.data);
-      setSummaries(cloud);
-      localStorage.setItem('mila_summaries', JSON.stringify(cloud));
-    } else {
-      // First login: migrate any local summaries to the cloud
-      const local = loadFromStorage('mila_summaries', []);
-      if (local.length > 0) {
-        const rows = local.map(s => ({ id: String(s.id), user_id: userId, data: s }));
-        await supabase.from('summaries').upsert(rows, { onConflict: 'id' });
+      if (data && data.length > 0) {
+        const cloud = data.map(row => row.data);
+        setSummaries(cloud);
+      } else {
+        // First login: migrate local summaries to cloud
+        const local = loadFromStorage('mila_summaries', []);
+        if (local.length > 0) {
+          const rows = local.map(s => ({ id: String(s.id), user_id: userId, data: s }));
+          await supabase.from('summaries').upsert(rows, { onConflict: 'id' });
+        }
       }
+    } catch (e) {
+      console.error('[MILA] loadCloudSummaries error:', e);
     }
   }
 
-  // ── Upsert one summary to Supabase (debounced 2 s per summary) ─────────
+  // ── Upsert one summary to Supabase (debounced 2 s) ────────────────────
   function scheduleUpsert(summary, userId) {
     if (!supabase || !userId) return;
     const id = String(summary.id);
     clearTimeout(upsertTimers.current[id]);
     upsertTimers.current[id] = setTimeout(async () => {
-      const { error } = await supabase
-        .from('summaries')
-        .upsert({ id, user_id: userId, data: summary }, { onConflict: 'id' });
-      if (error) console.error('[MILA] Supabase upsert error:', error);
+      try {
+        const { error } = await supabase
+          .from('summaries')
+          .upsert({ id, user_id: userId, data: summary }, { onConflict: 'id' });
+        if (error) console.error('[MILA] Supabase upsert error:', error);
+      } catch (e) {
+        console.error('[MILA] Supabase upsert exception:', e);
+      }
     }, 2000);
   }
 
@@ -94,46 +110,35 @@ export function MilaProvider({ children }) {
 
   function addSummary(summary) {
     const newSummary = { id: Date.now(), createdAt: new Date(), ...summary };
-    setSummaries(prev => {
-      const next = [newSummary, ...prev];
-      localStorage.setItem('mila_summaries', JSON.stringify(next));
-      return next;
-    });
-    // Immediate upsert for new summaries (user intent, not continuous updates)
+    setSummaries(prev => [newSummary, ...prev]);
+    // Immediate cloud upsert
     if (supabase && user) {
       supabase.from('summaries')
         .upsert({ id: String(newSummary.id), user_id: user.id, data: newSummary }, { onConflict: 'id' })
-        .then(({ error }) => { if (error) console.error('[MILA] Supabase insert error:', error); });
+        .then(({ error }) => { if (error) console.error('[MILA] Supabase insert error:', error); })
+        .catch(e => console.error('[MILA] Supabase insert exception:', e));
     }
     return newSummary;
   }
 
   function updateSummary(id, changes) {
     let updated;
-    setSummaries(prev => {
-      const next = prev.map(s => {
-        if (s.id !== id) return s;
-        updated = { ...s, ...changes };
-        return updated;
-      });
-      localStorage.setItem('mila_summaries', JSON.stringify(next));
-      return next;
-    });
+    setSummaries(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      updated = { ...s, ...changes };
+      return updated;
+    }));
     setActiveSummary(prev => prev?.id === id ? { ...prev, ...changes } : prev);
-    // Debounce cloud sync — avoids hammering Supabase during drag/generation
     if (user && updated) scheduleUpsert(updated, user.id);
   }
 
   function deleteSummary(id) {
-    setSummaries(prev => {
-      const next = prev.filter(s => s.id !== id);
-      localStorage.setItem('mila_summaries', JSON.stringify(next));
-      return next;
-    });
+    setSummaries(prev => prev.filter(s => s.id !== id));
     if (activeSummary?.id === id) setActiveSummary(null);
     if (supabase && user) {
       supabase.from('summaries').delete().eq('id', String(id))
-        .then(({ error }) => { if (error) console.error('[MILA] Supabase delete error:', error); });
+        .then(({ error }) => { if (error) console.error('[MILA] Supabase delete error:', error); })
+        .catch(e => console.error('[MILA] Supabase delete exception:', e));
     }
   }
 
@@ -141,16 +146,20 @@ export function MilaProvider({ children }) {
   async function signIn(email, password) {
     if (!supabase) return;
     setAuthError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setAuthError(error.message);
+    } catch (e) { setAuthError(e.message); }
   }
 
   async function signUp(email, password) {
     if (!supabase) return;
     setAuthError('');
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) setAuthError(error.message);
-    else setAuthError('__confirm__'); // signal to show "check your email"
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setAuthError(error.message);
+      else setAuthError('__confirm__');
+    } catch (e) { setAuthError(e.message); }
   }
 
   async function signOut() {
