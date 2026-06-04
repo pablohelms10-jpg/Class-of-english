@@ -129,7 +129,7 @@ export default function ConceptMapMode({ summary }) {
 
   const [mapData, setMapData] = useState(cached || null);
   const [loading, setLoading] = useState(!cached);
-  const [expanded, setExpanded] = useState(new Set([0]));
+  const [expanded, setExpanded] = useState(new Set());
   const [positions, setPositions] = useState(() => {
     if (cached?.nodes) {
       const p = {};
@@ -688,7 +688,7 @@ export default function ConceptMapMode({ summary }) {
                 borderRadius: 12,
                 boxShadow: isExpanded ? '0 16px 48px rgba(0,0,0,0.22)' : '0 4px 16px rgba(0,0,0,0.10)',
                 background: isMain
-                  ? 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)'
+                  ? 'linear-gradient(135deg, #7B6B8A 0%, #9E8B7D 100%)'
                   : 'var(--ghost-white)',
                 border: isMain ? 'none' : `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
                 overflow: 'hidden',
