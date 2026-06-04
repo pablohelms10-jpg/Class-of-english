@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
@@ -6,6 +6,8 @@ import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAG
 import { ocrImagePages } from '../utils/aiService';
 import { FlashcardIcon, QuizIcon, MapIcon, GalleryIcon, UploadIcon, DocumentIcon } from '../components/Icons';
 import StatsModal from '../components/StatsModal';
+import DailyStudyPage from './DailyStudyPage';
+import { generateDailyStudySession } from '../utils/dailyStudy';
 
 const TAG_OPTIONS = [
   { id: 'era1', label: 'ERA 1', color: '#8B7355' },
@@ -49,6 +51,9 @@ export default function Home() {
   const [collapsedSubjects, setCollapsedSubjects] = useState({});
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
+  const [dailyOpen, setDailyOpen] = useState(false);
+
+  const dailySession = useMemo(() => generateDailyStudySession(summaries), [summaries]);
 
   function toggleSelect(id) {
     setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -284,6 +289,41 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Daily Study Loop entry point */}
+      {dailySession && (
+        <div style={{ marginTop: 32 }}>
+          <button
+            onClick={() => setDailyOpen(true)}
+            style={{
+              width: '100%', padding: '18px 20px', borderRadius: 'var(--radius-md)',
+              background: 'linear-gradient(135deg, var(--ash-plum) 0%, var(--driftwood) 100%)',
+              border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'opacity 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            <div>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 4 }}>
+                Sesión diaria
+              </p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: 'white', marginBottom: 2 }}>
+                {dailySession.nodes.length} nodos prioritarios para hoy
+              </p>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                {dailySession.totalFlashcards} flashcards · {dailySession.totalQuestions} preguntas · ~{dailySession.estimatedMinutes} min
+              </p>
+            </div>
+            <div style={{ color: 'white', fontSize: 22, opacity: 0.8, flexShrink: 0 }}>→</div>
+          </button>
+        </div>
+      )}
+
+      {dailyOpen && ReactDOM.createPortal(
+        <DailyStudyPage onClose={() => setDailyOpen(false)} />,
+        document.body
+      )}
 
       {summaries.length > 0 && (
         <div style={{ marginTop: 48 }}>
