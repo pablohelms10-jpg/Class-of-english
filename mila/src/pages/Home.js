@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from '../components/MilaLogo';
 import { extractTextFromFile, extractImagesFromFile, extractFromPDF, MAX_PDF_PAGES } from '../utils/parseContent';
@@ -423,8 +424,8 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onPointerEnter={e => { if (e.pointerType === 'mouse') setHovered(true); }}
+      onPointerLeave={e => { if (e.pointerType === 'mouse') setHovered(false); }}
       style={{
         padding: '20px',
         borderRadius: 'var(--radius-md)',
@@ -482,7 +483,10 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete }) {
           >✏</button>
         </>
       )}
-      {statsOpen && <StatsModal summary={summary} onClose={() => setStatsOpen(false)} />}
+      {statsOpen && ReactDOM.createPortal(
+        <StatsModal summary={summary} onClose={() => setStatsOpen(false)} />,
+        document.body
+      )}
       <button
         onClick={e => { e.stopPropagation(); onDelete(); }}
         style={{
