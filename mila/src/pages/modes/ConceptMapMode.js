@@ -693,7 +693,6 @@ export default function ConceptMapMode({ summary }) {
         }}
       >
         {/* Dot grid */}
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(circle, var(--whisper-grey) 1.2px, transparent 1.2px)', backgroundSize: '28px 28px', pointerEvents: 'none', zIndex: 0 }} />
 
         {/* Transformed canvas */}
         <div style={{
