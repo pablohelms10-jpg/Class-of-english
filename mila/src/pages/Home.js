@@ -382,52 +382,62 @@ export default function Home() {
 function HeroSection() {
   const { darkMode } = useMila();
 
-  const line1 = 'Sube tu apunte y estudia a tu manera.';
-  const line2 = 'Mila lo convierte en mapas, flashcards y preguntas para ti.';
-
   return (
-    <div style={{ textAlign: 'center', padding: '48px 0 56px', animation: 'fadeUp 0.6s ease both' }}>
+    <div style={{ textAlign: 'center', padding: '48px 0 56px' }}>
       <style>{`
-        @keyframes letterFadeUp {
-          0%   { opacity: 0; transform: translateY(14px); }
-          100% { opacity: 1; transform: translateY(0); }
+        @keyframes heroFadeUp {
+          0%   { opacity: 0; transform: translateY(20px); filter: blur(8px); }
+          100% { opacity: 1; transform: translateY(0);    filter: blur(0px); }
         }
-        @keyframes floatLetter {
-          0%, 100% { transform: translateY(0px); }
-          50%       { transform: translateY(-3px); }
+        @keyframes wordIn {
+          0%   { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+          100% { opacity: 1; transform: translateY(0);    filter: blur(0); }
         }
       `}</style>
 
-      <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9 }}>
+      <div style={{ display: 'inline-flex', marginBottom: 28, opacity: 0.9, animation: 'heroFadeUp 0.8s cubic-bezier(0.16,1,0.3,1) both' }}>
         <MilaLogo size={64} dark={darkMode} />
       </div>
-      <h1 style={{ fontSize: 40, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-1px', marginBottom: 24 }}>
+
+      <h1 style={{ fontSize: 40, fontWeight: 300, color: 'var(--text-dark)', letterSpacing: '-1px', marginBottom: 24, animation: 'heroFadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s both' }}>
         Hola, soy <span style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontWeight: 600 }}>MILA</span>
       </h1>
 
-      {/* Animated text lines */}
-      <div style={{ maxWidth: 500, margin: '0 auto 40px', lineHeight: 1.8 }}>
-        <AnimatedLine text={line1} baseDelay={0} fontSize={17} bold />
-        <AnimatedLine text={line2} baseDelay={line1.length * 18} fontSize={15} />
+      <div style={{ maxWidth: 500, margin: '0 auto 40px' }}>
+        <WordReveal
+          text="Sube tu apunte y estudia a tu manera."
+          startDelay={300}
+          fontSize={17}
+          fontWeight={500}
+          color="var(--text-dark)"
+        />
+        <WordReveal
+          text="Mila lo convierte en mapas, flashcards y preguntas para ti."
+          startDelay={700}
+          fontSize={15}
+          fontWeight={400}
+          color="var(--text-mid)"
+        />
       </div>
     </div>
   );
 }
 
-function AnimatedLine({ text, baseDelay, fontSize, bold }) {
+function WordReveal({ text, startDelay, fontSize, fontWeight, color }) {
+  const words = text.split(' ');
   return (
-    <p style={{ margin: '0 0 6px', fontSize, fontWeight: bold ? 500 : 400, color: bold ? 'var(--text-dark)' : 'var(--text-mid)', display: 'block' }}>
-      {text.split('').map((char, i) => (
+    <p style={{ margin: '0 0 8px', fontSize, fontWeight, color, lineHeight: 1.7 }}>
+      {words.map((word, i) => (
         <span
           key={i}
           style={{
             display: 'inline-block',
-            whiteSpace: char === ' ' ? 'pre' : 'normal',
-            animation: `letterFadeUp 0.35s ease both, floatLetter ${2.2 + (i % 5) * 0.15}s ease-in-out ${1.5 + i * 0.04}s infinite`,
-            animationDelay: `${baseDelay + i * 18}ms, ${1500 + baseDelay + i * 18}ms`,
+            marginRight: i < words.length - 1 ? '0.28em' : 0,
+            animation: 'wordIn 0.5s cubic-bezier(0.16,1,0.3,1) both',
+            animationDelay: `${startDelay + i * 60}ms`,
           }}
         >
-          {char}
+          {word}
         </span>
       ))}
     </p>
