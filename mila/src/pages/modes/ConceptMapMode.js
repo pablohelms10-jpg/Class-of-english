@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useMila } from '../../context/MilaContext';
-import { generateConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI, generateNodeFlashcardsAI, generateNodeQuestionsAI } from '../../utils/aiService';
+import { generateConceptMapAI, expandConceptMapAI, assignImagesToNodes, quickAssignImages, generateFlashcardsAI, generateQuestionsAI, generateNodeFlashcardsAI, generateNodeQuestionsAI } from '../../utils/aiService';
 import { generateConceptMap } from '../../utils/parseContent';
 import MilaLoadingScreen from '../../components/MilaLoadingScreen';
 import { MapIcon } from '../../components/Icons';
@@ -146,6 +146,7 @@ export default function ConceptMapMode({ summary }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [nodeGenerating, setNodeGenerating] = useState({});
   const [reassigning, setReassigning] = useState(false);
+  const [expanding, setExpanding] = useState(false);
   const [nodePanel, setNodePanel] = useState(null); // { node, tab: 'flashcards'|'questions' }
 
   const panRef = useRef(pan);
@@ -508,6 +509,48 @@ export default function ConceptMapMode({ summary }) {
     setReassigning(false);
   }
 
+  async function expandMap() {
+    if (!mapData || !text) return;
+    setExpanding(true);
+    try {
+      const extra = await expandConceptMapAI(text, mapData);
+      if (!extra?.nodes?.length) return;
+
+      // Merge new nodes into existing map
+      const existingNodes = mapData.nodes || [];
+      const existingEdges = mapData.edges || [];
+
+      // Auto-position new nodes below existing ones
+      const maxY = Math.max(...existingNodes.map(n => n.y || 0), 0);
+      const spacedNodes = extra.nodes.map((n, i) => ({
+        ...n,
+        x: 100 + (i % 4) * 300,
+        y: maxY + 160 + Math.floor(i / 4) * 180,
+      }));
+
+      // Filter edges that reference valid node IDs
+      const allNodeIds = new Set([...existingNodes.map(n => n.id), ...spacedNodes.map(n => n.id)]);
+      const newEdges = (extra.edges || []).filter(e => allNodeIds.has(e.from) && allNodeIds.has(e.to));
+
+      const updated = {
+        ...mapData,
+        nodes: [...existingNodes, ...spacedNodes],
+        edges: [...existingEdges, ...newEdges],
+      };
+
+      setMapData(updated);
+      setPositions(prev => {
+        const p = { ...prev };
+        spacedNodes.forEach(n => { p[n.id] = { x: n.x, y: n.y }; });
+        return p;
+      });
+      updateSummary(summary.id, { conceptMap: updated });
+    } catch (e) {
+      console.error('[MILA] expandMap error:', e);
+    }
+    setExpanding(false);
+  }
+
   async function generateNodeQs(node) {
     setNodeGenerating(prev => ({ ...prev, [node.id]: 'questions' }));
     try {
@@ -584,6 +627,14 @@ export default function ConceptMapMode({ summary }) {
               {reassigning ? '⟳' : '🖼'}
             </button>
           )}
+          <button
+            onClick={expandMap}
+            disabled={expanding}
+            title="Agregar más nodos con información faltante"
+            style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto', opacity: expanding ? 0.5 : 1 }}
+          >
+            {expanding ? '⟳' : '＋'}
+          </button>
           <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
           <button
             onClick={toggleFullscreen}

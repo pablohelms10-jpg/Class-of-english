@@ -545,3 +545,50 @@ Reglas ABSOLUTAS:
   if (!match) throw new Error('Respuesta inválida de la IA');
   return JSON.parse(match[0]);
 }
+
+// Generates additional nodes to add to an existing concept map.
+// Returns only new nodes+edges, never duplicating existing labels.
+export async function expandConceptMapAI(text, existingMap) {
+  const cleanText = cleanTextForMap(text);
+  const existingLabels = (existingMap.nodes || []).map(n => n.label).join(', ');
+  const maxId = Math.max(...(existingMap.nodes || []).map(n => n.id), -1);
+  const startId = maxId + 1;
+
+  const prompt = `Eres un asistente que amplía mapas conceptuales. Tu tarea es identificar conceptos importantes del texto que AÚN NO están representados en el mapa existente, y agregarlos como nuevos nodos.
+
+RESUMEN ORIGINAL:
+${smartSample(cleanText)}
+
+CONCEPTOS YA EN EL MAPA (NO repetir ninguno):
+${existingLabels}
+
+Generá entre 4 y 8 nodos NUEVOS que aporten información relevante que falta en el mapa. Los IDs deben comenzar en ${startId}.
+
+Respondé SOLO con JSON válido, sin texto antes ni después:
+{
+  "nodes": [
+    {
+      "id": ${startId},
+      "label": "Término exacto del texto (2-4 palabras)",
+      "type": "detail",
+      "summary": "Primera oración del texto, COPIADA TEXTUALMENTE",
+      "content": "Fragmento del texto original, COPIADO TEXTUALMENTE",
+      "bullets": ["Frase exacta 1", "Frase exacta 2"],
+      "x": 200, "y": 1000
+    }
+  ],
+  "edges": [{"from": 0, "to": ${startId}, "label": "incluye"}]
+}
+
+Reglas:
+- summary, content y bullets: CITAS TEXTUALES del original, sin parafrasear
+- NO incluir ningún label que ya esté en el mapa
+- Usar "from" existente que sea el nodo más relacionado
+- Distribuí los nuevos nodos debajo de los existentes (y > 900)
+- NUNCA inventes ni parafrasees`;
+
+  const raw = await askClaude(prompt, [], 3000);
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Respuesta inválida de la IA');
+  return JSON.parse(match[0]);
+}
