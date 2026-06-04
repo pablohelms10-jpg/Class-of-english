@@ -671,11 +671,9 @@ export default function ConceptMapMode({ summary }) {
             // Dot color: green if mastered, else default
             const dotColor = isMastered
               ? '#7BAE7F'
-              : isMain
-                ? 'rgba(255,255,255,0.7)'
-                : isSub
-                  ? 'var(--driftwood)'
-                  : 'var(--whisper-grey)';
+              : isSub
+                ? 'var(--driftwood)'
+                : 'var(--whisper-grey)';
 
             const nodeCardCount = flashcards.filter(f => f.conceptLabel === node.label).length;
             const nodeQCount = questions.filter(q => q.conceptLabel === node.label).length;
@@ -687,10 +685,8 @@ export default function ConceptMapMode({ summary }) {
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
                 borderRadius: 12,
                 boxShadow: isExpanded ? '0 16px 48px rgba(0,0,0,0.22)' : '0 4px 16px rgba(0,0,0,0.10)',
-                background: isMain
-                  ? 'linear-gradient(135deg, #7B6B8A 0%, #9E8B7D 100%)'
-                  : 'var(--ghost-white)',
-                border: isMain ? 'none' : `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
+                background: 'var(--ghost-white)',
+                border: `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
                 overflow: 'hidden',
                 transition: 'box-shadow 0.25s cubic-bezier(0.4,0,0.2,1)',
               }}>
@@ -702,28 +698,28 @@ export default function ConceptMapMode({ summary }) {
                 >
                   <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: dotColor, transition: 'background 0.3s' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: isMain ? 'white' : 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
-                    <div style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.72)' : 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
                   </div>
-                  <span style={{ flexShrink: 0, fontSize: 9, color: isMain ? 'rgba(255,255,255,0.45)' : 'var(--text-light)', paddingTop: 3 }}>{isExpanded ? '▲' : '▼'}</span>
+                  <span style={{ flexShrink: 0, fontSize: 9, color: 'var(--text-light)', paddingTop: 3 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
 
                 {/* Expanded body */}
                 {isExpanded && (
-                  <div style={{ borderTop: `1px solid ${isMain ? 'rgba(255,255,255,0.2)' : 'var(--soft-grey)'}` }}>
+                  <div style={{ borderTop: '1px solid var(--soft-grey)' }}>
                     {img && (
                       <div style={{ width: '100%', height: 200, overflow: 'hidden' }}>
                         <img src={img.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
                       </div>
                     )}
                     <div style={{ padding: '12px 12px 14px' }}>
-                      {node.content && <p style={{ fontSize: 12, color: isMain ? 'rgba(255,255,255,0.88)' : 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
+                      {node.content && <p style={{ fontSize: 12, color: 'var(--text-mid)', lineHeight: 1.65, marginBottom: 10 }}>{node.content}</p>}
                       {node.bullets?.length > 0 && (
                         <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
                           {node.bullets.map((b, bi) => (
                             <li key={bi} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
-                              <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: isMain ? 'rgba(255,255,255,0.6)' : 'var(--driftwood)', marginTop: 5 }} />
-                              <span style={{ fontSize: 11, color: isMain ? 'rgba(255,255,255,0.82)' : 'var(--text-dark)', lineHeight: 1.5 }}>{b}</span>
+                              <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: '50%', background: 'var(--driftwood)', marginTop: 5 }} />
+                              <span style={{ fontSize: 11, color: 'var(--text-dark)', lineHeight: 1.5 }}>{b}</span>
                             </li>
                           ))}
                         </ul>
@@ -742,9 +738,9 @@ export default function ConceptMapMode({ summary }) {
                           disabled={!!genState}
                           style={{
                             flex: 1, padding: '6px 8px', borderRadius: 7,
-                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
+                            border: '1px solid var(--soft-grey)',
                             background: 'transparent',
-                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            color: 'var(--text-mid)',
                             fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
                             opacity: genState && genState !== 'flashcards' ? 0.4 : 1,
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -759,9 +755,9 @@ export default function ConceptMapMode({ summary }) {
                           disabled={!!genState}
                           style={{
                             flex: 1, padding: '6px 8px', borderRadius: 7,
-                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.3)' : 'var(--soft-grey)'}`,
+                            border: '1px solid var(--soft-grey)',
                             background: 'transparent',
-                            color: isMain ? 'rgba(255,255,255,0.8)' : 'var(--text-mid)',
+                            color: 'var(--text-mid)',
                             fontSize: 10, fontWeight: 500, cursor: genState ? 'default' : 'pointer',
                             opacity: genState && genState !== 'questions' ? 0.4 : 1,
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
@@ -779,9 +775,9 @@ export default function ConceptMapMode({ summary }) {
                           onClick={e => { e.stopPropagation(); setNodePanel({ node, tab: nodeCardCount > 0 ? 'flashcards' : 'questions' }); }}
                           style={{
                             marginTop: 8, width: '100%', padding: '6px 10px', borderRadius: 7,
-                            border: `1px solid ${isMain ? 'rgba(255,255,255,0.25)' : 'var(--soft-grey)'}`,
+                            border: '1px solid var(--soft-grey)',
                             background: 'transparent',
-                            color: isMain ? 'rgba(255,255,255,0.7)' : 'var(--text-light)',
+                            color: 'var(--text-light)',
                             fontSize: 10, cursor: 'pointer',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                           }}
