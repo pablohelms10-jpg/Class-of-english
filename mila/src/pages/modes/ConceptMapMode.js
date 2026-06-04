@@ -238,17 +238,7 @@ export default function ConceptMapMode({ summary }) {
     setMapData(base);
     applyNodes(base.nodes);
     updateSummary(summary.id, { conceptMap: base });
-    // Image assignment is handled by the mapData useEffect below
-    // Auto-generate tagged flashcards + questions if not yet done
-    const hasTagged = (summary.flashcards || []).some(f => f.conceptLabel);
-    if (!hasTagged && text) {
-      generateFlashcardsAI(text, [], images, data.nodes)
-        .then(({ cards }) => updateSummary(summary.id, { flashcards: cards }))
-        .catch(e => console.warn('[MILA] flashcard gen failed:', e));
-      generateQuestionsAI(text, [], images, data.nodes)
-        .then(({ questions: qs }) => updateSummary(summary.id, { questions: qs }))
-        .catch(e => console.warn('[MILA] question gen failed:', e));
-    }
+    // Flashcards and questions are generated on demand (user clicks + button on each node)
   }
 
   // Dedicated effect: runs OCR image assignment whenever mapData changes
@@ -262,20 +252,8 @@ export default function ConceptMapMode({ summary }) {
       .finally(() => setImagesReady(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-assign images to nodes whenever images become available and nodes don't have them
-  useEffect(() => {
-    if (!mapData?.nodes?.length || !loadedImages.length) return;
-    const alreadyAssigned = mapData.nodes.filter(n => n.imageIndex != null && n.imageIndex >= 0).length;
-    if (alreadyAssigned >= Math.ceil(mapData.nodes.length * 0.5)) return; // already mostly assigned
-    console.log('[MILA] Auto-assigning images to', mapData.nodes.length, 'nodes');
-    assignImagesToNodes(mapData.nodes, loadedImages)
-      .then(withImg => {
-        const r = { ...mapData, nodes: withImg };
-        setMapData(r);
-        updateSummary(summary.id, { conceptMap: r });
-      })
-      .catch(e => console.error('[MILA] Image assignment failed:', e));
-  }, [mapData?.nodes?.length, loadedImages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Image assignment runs only during initial generation (inside applyMap/generateConceptMapAI)
+  // or when the user manually clicks the 🖼 button — never automatically on reload.
 
   // Generate concept map AFTER images are loaded so they're available for analysis.
   // If no images are available, use the free local parser instead of calling the API
