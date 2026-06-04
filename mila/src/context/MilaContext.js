@@ -30,8 +30,10 @@ export function MilaProvider({ children }) {
 
   // ── Persist summaries to localStorage (effect, not inside state updater) ─
   useEffect(() => {
+    // Always save images separately so they survive Supabase sync overwrites
+    summaries.forEach(s => { if (s.images) saveImages(s.id, s.images); });
     saveToStorage('mila_summaries', summaries);
-  }, [summaries]);
+  }, [summaries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Persist dark mode ──────────────────────────────────────────────────
   useEffect(() => {
@@ -90,6 +92,8 @@ export function MilaProvider({ children }) {
 
   // ── Load summaries from Supabase ───────────────────────────────────────
   async function loadCloudSummaries(userId) {
+    const local = loadFromStorage('mila_summaries', []);
+
     try {
       const { data, error } = await supabase
         .from('summaries')
@@ -97,25 +101,37 @@ export function MilaProvider({ children }) {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (error) { console.error('[MILA] Supabase load error:', error); return; }
+      if (error) {
+        console.error('[MILA] Supabase load error:', error);
+        // Fallback: keep localStorage data
+        if (local.length > 0) setSummaries(local);
+        return;
+      }
 
       if (data && data.length > 0) {
-        // Merge cloud metadata with locally-stored images
+        // Cloud has data — merge with local images and use as source of truth
         const cloud = data.map(row => mergeImages(row.data));
         setSummaries(cloud);
       } else {
-        // First login: migrate local summaries to cloud (without images)
-        const local = loadFromStorage('mila_summaries', []);
+        // No cloud data — migrate local summaries to cloud
         if (local.length > 0) {
-          // Save images locally keyed by id, then upsert stripped data
           local.forEach(s => { if (s.images) saveImages(s.id, s.images); });
-          const rows = local.map(s => ({ id: String(s.id), user_id: userId, data: stripImages(s) }));
-          const { error: upsertErr } = await supabase.from('summaries').upsert(rows, { onConflict: 'id' });
+          const rows = local.map(s => ({
+            id: String(s.id),
+            user_id: userId,
+            data: stripImages(s),
+          }));
+          const { error: upsertErr } = await supabase
+            .from('summaries')
+            .upsert(rows, { onConflict: 'id' });
           if (upsertErr) console.error('[MILA] Migration upsert error:', upsertErr);
+          // Always keep showing local data regardless of upsert result
+          setSummaries(local);
         }
       }
     } catch (e) {
       console.error('[MILA] loadCloudSummaries error:', e);
+      if (local.length > 0) setSummaries(local);
     }
   }
 
