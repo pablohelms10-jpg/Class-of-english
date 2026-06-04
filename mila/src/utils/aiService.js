@@ -603,6 +603,7 @@ Reglas:
 - 1 nodo "main", 3-5 nodos "sub" (segunda fila), 5-8 nodos "detail" (tercera fila)
 - Distribuí en espacio 1200x900px
 - Cubrí TODOS los conceptos que aparecen en el material, sin omitir nada importante
+- CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO al concepto (ej: "Músculo Bíceps", "Nervio Radial"). NUNCA repitas el nombre del archivo ni el título general como label de múltiples nodos
 - NUNCA uses labels genéricos como "Concepto 1" o "Página N"`
     : `Eres un profesor experto organizando material de estudio en un mapa conceptual. Comprendé el tema en profundidad e identificá todos los conceptos importantes.
 ${textSection}
@@ -627,12 +628,23 @@ Reglas:
 - 1 nodo "main", 3-5 nodos "sub", 5-7 nodos "detail"
 - Distribuí en 1200x900px
 - Cubrí todos los conceptos del texto
-- NUNCA uses labels genéricos`;
+- NUNCA uses labels genéricos
+- CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO. NUNCA repitas el nombre del archivo como label de múltiples nodos`;
 
-  const raw = await askClaude(prompt, selectedImages, 4000);
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Respuesta inválida de la IA');
-  return JSON.parse(match[0]);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const raw = await askClaude(prompt, selectedImages, 4000);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) { if (attempt === 0) continue; throw new Error('Respuesta inválida de la IA'); }
+    const result = JSON.parse(match[0]);
+    // Validate: detect if most nodes share the same label prefix (bad generation)
+    const labels = (result.nodes || []).map(n => (n.label || '').slice(0, 15).toLowerCase());
+    const freq = {};
+    labels.forEach(l => { freq[l] = (freq[l] || 0) + 1; });
+    const maxRepeat = Math.max(...Object.values(freq));
+    if (maxRepeat > Math.ceil(labels.length * 0.4) && attempt === 0) continue; // retry once
+    return result;
+  }
+  throw new Error('No se pudo generar un mapa válido');
 }
 
 // Generates additional nodes to add to an existing concept map.
