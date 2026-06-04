@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useMila } from '../context/MilaContext';
 import MilaLogo from './MilaLogo';
 import StatsModal from './StatsModal';
+import ChatPanel, { ChatIcon } from './ChatPanel';
 
 const TAG_OPTIONS = [
   { id: 'era1', label: 'ERA 1', color: '#8B7355' },
@@ -15,6 +16,7 @@ export default function SidePanel({ open, onClose }) {
   const { summaries, darkMode, toggleDark, user, signOut, supabaseEnabled, syncError,
           setActiveSummary, setActiveMode, updateSummary, deleteSummary } = useMila();
   const [view, setView] = useState('menu'); // 'menu' | 'library' | 'stats'
+  const [chatOpen, setChatOpen] = useState(false);
   const [editingSummaryId, setEditingSummaryId] = useState(null);
   const [editSummaryTitle, setEditSummaryTitle] = useState('');
   const [editingFolder, setEditingFolder] = useState(null);
@@ -176,6 +178,12 @@ export default function SidePanel({ open, onClose }) {
                 label="Estadísticas"
                 onClick={() => setView('stats')}
                 chevron
+              />
+              <NavItem
+                icon={<ChatIcon size={16} color="currentColor" />}
+                label="Chat con MILA"
+                badge={summaries.length > 0 ? null : undefined}
+                onClick={() => { onClose(); setTimeout(() => setChatOpen(true), 100); }}
               />
 
               <div style={{ margin: '8px 16px', borderTop: '1px solid var(--soft-grey)', paddingTop: 8 }}>
@@ -442,6 +450,9 @@ export default function SidePanel({ open, onClose }) {
         <StatsModal summary={statsForSummary} onClose={() => setStatsForSummary(null)} />,
         document.body
       )}
+
+      {/* Chat panel — rendered outside left panel so both can coexist */}
+      <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
     </>
   );
 }
