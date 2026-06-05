@@ -141,9 +141,8 @@ export default function ConceptMapMode({ summary }) {
   const questions = summary?.questions || [];
 
   const [mapData, setMapData] = useState(cached || null);
-  const [loading, setLoading] = useState(true); // always wait for image load first
+  const [loading, setLoading] = useState(!cached); // skip loading if map already cached
   const [loadedImages, setLoadedImages] = useState(summary?.images || []);
-  const [imagesReady, setImagesReady] = useState((summary?.images?.length || 0) > 0);
   const [wigglingNode, setWigglingNode] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
   const [positions, setPositions] = useState(() => {
@@ -241,63 +240,67 @@ export default function ConceptMapMode({ summary }) {
     // Flashcards and questions are generated on demand (user clicks + button on each node)
   }
 
-  // Dedicated effect: runs OCR image assignment whenever mapData changes
-  // and there are images but no assignments yet. Separated from applyMap so
-  // Load images from IndexedDB if not already in memory (they're stripped from localStorage)
+  // Single async init: load images from IndexedDB first, THEN generate the map.
+  // Using one async function avoids React state timing issues between two separate useEffects.
   useEffect(() => {
-    if (loadedImages.length > 0) { setImagesReady(true); return; }
-    idbLoadImages(String(summary.id))
-      .then(imgs => { if (imgs?.length) setLoadedImages(imgs); })
-      .catch(() => {})
-      .finally(() => setImagesReady(true));
+    if (cached) return; // map already exists, nothing to do
+    let cancelled = false;
+
+    async function init() {
+      // 1. Try to get images — first from memory, then IndexedDB
+      let imgs = summary?.images?.length ? summary.images : [];
+      if (imgs.length === 0) {
+        try {
+          const fromIdb = await idbLoadImages(String(summary.id));
+          if (fromIdb?.length) imgs = fromIdb;
+        } catch {}
+      }
+      if (cancelled) return;
+      if (imgs.length > 0) setLoadedImages(imgs);
+
+      // 2. Generate map with whatever images we have
+      setLoading(true);
+      try {
+        const data = await generateConceptMapAI(text, imgs);
+        if (cancelled) return;
+        if (!data?.nodes?.length) throw new Error('empty');
+        applyMap(data);
+      } catch {
+        const fb = generateConceptMap(text);
+        if (!cancelled && fb?.nodes?.length) applyMap(fb);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    init();
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Image assignment runs only during initial generation (inside applyMap/generateConceptMapAI)
-  // or when the user manually clicks the 🖼 button — never automatically on reload.
-
-  // Generate concept map AFTER images are loaded so they're available for analysis.
-  // If no images are available, use the free local parser instead of calling the API
-  // (avoids charging the user when the result would be low quality anyway).
-  useEffect(() => {
-    if (!imagesReady) return;
-    if (cached) { setLoading(false); return; }
-    setLoading(true);
-    if (!loadedImages.length && !text.trim()) {
-      setLoading(false);
-      return;
-    }
-    // If the summary has images but none loaded from IndexedDB yet, use free local fallback
-    // to avoid an expensive API call that would produce duplicate-label maps
-    const summaryHasImages = (summary?.images?.length || 0) > 0 || loadedImages.length > 0;
-    if (summaryHasImages && loadedImages.length === 0) {
-      // Images expected but not loaded — use free local parser, don't charge
-      const fb = generateConceptMap(text);
-      if (fb?.nodes?.length) applyMap(fb);
-      setLoading(false);
-      return;
-    }
-    generateConceptMapAI(text, loadedImages)
-      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
-      .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
-      .finally(() => setLoading(false));
-  }, [imagesReady]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function regenerate() {
+  async function regenerate() {
     setLoading(true); setMapData(null); setExpanded(new Set([0]));
     setScale(0.75); setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
-    // If images are expected but not in memory, use free local parser to avoid charges
-    const summaryHasImages = (summary?.images?.length || 0) > 0 || loadedImages.length > 0;
-    if (summaryHasImages && loadedImages.length === 0) {
+
+    // Re-load images from IndexedDB if not already in memory
+    let imgs = loadedImages;
+    if (imgs.length === 0) {
+      try {
+        const fromIdb = await idbLoadImages(String(summary.id));
+        if (fromIdb?.length) { imgs = fromIdb; setLoadedImages(imgs); }
+      } catch {}
+    }
+
+    try {
+      const data = await generateConceptMapAI(text, imgs);
+      if (!data?.nodes?.length) throw new Error('empty');
+      applyMap(data);
+    } catch {
       const fb = generateConceptMap(text);
       if (fb?.nodes?.length) applyMap(fb);
+    } finally {
       setLoading(false);
-      return;
     }
-    generateConceptMapAI(text, loadedImages)
-      .then(data => { if (!data?.nodes?.length) throw new Error('empty'); applyMap(data); })
-      .catch(() => { const fb = generateConceptMap(text); if (fb?.nodes?.length) applyMap(fb); })
-      .finally(() => setLoading(false));
   }
 
   function zoom(factor, cx, cy) {
