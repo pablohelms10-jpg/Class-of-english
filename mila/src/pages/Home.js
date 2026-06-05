@@ -467,7 +467,8 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete, selectMode, select
 
   if (editing) {
     return (
-      <div
+      <form
+        onSubmit={handleSaveEdit}
         style={{
           padding: '20px',
           borderRadius: 'var(--radius-md)',
@@ -512,7 +513,7 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete, selectMode, select
         />
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={handleSaveEdit}
+            type="submit"
             style={{
               padding: '6px 16px',
               borderRadius: 20,
@@ -538,7 +539,7 @@ function SummaryCard({ summary, onOpen, onOpenMode, onDelete, selectMode, select
             Cancelar
           </button>
         </div>
-      </div>
+      </form>
     );
   }
 
