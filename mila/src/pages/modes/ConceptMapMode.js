@@ -132,7 +132,7 @@ const miniNavBtn = {
 };
 
 export default function ConceptMapMode({ summary }) {
-  const { updateSummary } = useMila();
+  const { updateSummary, loadSummaryImages } = useMila();
   const text = summary?.text || '';
   const images = summary?.images || [];
   const cached = summary?.conceptMap;
@@ -240,25 +240,37 @@ export default function ConceptMapMode({ summary }) {
     // Flashcards and questions are generated on demand (user clicks + button on each node)
   }
 
-  // Single async init: load images from IndexedDB first, THEN generate the map.
-  // Using one async function avoids React state timing issues between two separate useEffects.
+  // Single async init: load images first (sessionCache → IndexedDB), THEN generate.
+  // loadSummaryImages uses the context's sessionImageCache which is also populated
+  // by Supabase's mergeImages — more reliable than calling idbLoadImages directly.
   useEffect(() => {
-    if (cached) return; // map already exists, nothing to do
+    if (cached) return;
     let cancelled = false;
 
     async function init() {
-      // 1. Try to get images — first from memory, then IndexedDB
+      // 1. Load images: try prop first, then context cache (sessionCache + IndexedDB)
       let imgs = summary?.images?.length ? summary.images : [];
       if (imgs.length === 0) {
         try {
-          const fromIdb = await idbLoadImages(String(summary.id));
-          if (fromIdb?.length) imgs = fromIdb;
+          const fromCache = await loadSummaryImages(String(summary.id));
+          if (fromCache?.length) imgs = fromCache;
         } catch {}
+      }
+      // 2. If still empty, wait up to 4s for Supabase to finish loading images
+      if (imgs.length === 0) {
+        const deadline = Date.now() + 4000;
+        while (Date.now() < deadline && !cancelled) {
+          await new Promise(r => setTimeout(r, 600));
+          try {
+            const fromCache = await loadSummaryImages(String(summary.id));
+            if (fromCache?.length) { imgs = fromCache; break; }
+          } catch {}
+        }
       }
       if (cancelled) return;
       if (imgs.length > 0) setLoadedImages(imgs);
 
-      // 2. Generate map with whatever images we have
+      // 3. Generate map
       setLoading(true);
       try {
         const data = await generateConceptMapAI(text, imgs);
@@ -282,12 +294,12 @@ export default function ConceptMapMode({ summary }) {
     setScale(0.75); setPan({ x: 20, y: 20 });
     updateSummary(summary.id, { conceptMap: null });
 
-    // Re-load images from IndexedDB if not already in memory
+    // Re-load images using context cache (sessionCache → IndexedDB)
     let imgs = loadedImages;
     if (imgs.length === 0) {
       try {
-        const fromIdb = await idbLoadImages(String(summary.id));
-        if (fromIdb?.length) { imgs = fromIdb; setLoadedImages(imgs); }
+        const fromCache = await loadSummaryImages(String(summary.id));
+        if (fromCache?.length) { imgs = fromCache; setLoadedImages(imgs); }
       } catch {}
     }
 
