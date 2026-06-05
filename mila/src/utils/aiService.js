@@ -578,37 +578,41 @@ export async function generateConceptMapAI(text, images = []) {
     ? `\nTEXTO DEL RESUMEN (puede ser escaso o solo recordatorios):\n${smartSample(cleanText)}\n`
     : '';
 
-  const prompt = hasImages
-    ? `Eres un profesor experto analizando material de estudio. El alumno te proporcionó ${images.length} imagen(es) de sus apuntes/resúmenes y algo de texto. Tu tarea es COMPRENDER TODO el contenido — diagramas, esquemas, texto escrito a mano, tablas, flechas con etiquetas, anotaciones — y construir un mapa conceptual completo que capture TODA la información importante, igual que lo haría un docente que entiende el tema en profundidad.
-${textSection}
-Las imágenes adjuntas contienen el material real del resumen. Analizalas completamente.
+  // Extract the filename/title to explicitly forbid it as a label
+  const forbiddenLabel = cleanText.split('\n')[0]?.trim().slice(0, 60) || '';
 
-Respondé SOLO con JSON válido, sin texto antes ni después. Generá 10-14 nodos que cubran TODOS los conceptos importantes:
+  const prompt = hasImages
+    ? `Eres un profesor experto en anatomía y ciencias de la salud analizando apuntes de un alumno. Las imágenes son páginas de un resumen/apunte. Tu tarea: extraer TODOS los conceptos específicos (estructuras, músculos, nervios, arterias, funciones, relaciones) y armar un mapa conceptual detallado.
+${textSection}
+PASO 1 — Antes de responder, listá mentalmente todos los nombres específicos que ves en las imágenes: músculos (ej: bíceps braquial, braquiorradial), nervios (ej: nervio radial, mediano), arterias, tendones, inserciones, orígenes, funciones, etc.
+
+PASO 2 — Usá ESE listado como labels de los nodos. NUNCA uses el título de la página ni el nombre del archivo como label.
+
+Respondé SOLO con JSON válido. Generá 10-14 nodos:
 {
-  "title": "Título del tema principal",
+  "title": "Título descriptivo del tema",
   "nodes": [
     {
       "id": 0,
-      "label": "Concepto principal (2-4 palabras)",
+      "label": "Nombre específico del concepto",
       "type": "main",
-      "summary": "Descripción clara y completa del concepto principal",
-      "content": "Explicación detallada integrando TODA la información del material: texto, diagramas, esquemas, relaciones entre estructuras, etc.",
-      "bullets": ["Aspecto clave 1 con detalle", "Aspecto clave 2 con detalle", "Aspecto clave 3 con detalle"],
+      "summary": "Qué es / función principal",
+      "content": "Detalle: origen, inserción, inervación, irrigación, función, relaciones anatómicas",
+      "bullets": ["Origen: ...", "Inserción: ...", "Inervación: ...", "Función: ..."],
       "x": 600, "y": 80
     }
   ],
-  "edges": [{"from": 0, "to": 1, "label": "incluye"}]
+  "edges": [{"from": 0, "to": 1, "label": "inerva"}]
 }
 
-Reglas:
-- Analizá CADA imagen en detalle: texto manuscrito, diagramas anatómicos, esquemas, tablas, flechas, etiquetas
-- content y bullets deben integrar información de texto E imágenes, explicando relaciones, funciones, orígenes, inserciones, inervación, irrigación, etc. según corresponda al tema
-- No te limites al texto — el material visual es la fuente principal
-- 1 nodo "main", 3-5 nodos "sub" (segunda fila), 5-8 nodos "detail" (tercera fila)
-- Distribuí en espacio 1200x900px
-- Cubrí TODOS los conceptos que aparecen en el material, sin omitir nada importante
-- CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO al concepto (ej: "Músculo Bíceps", "Nervio Radial"). NUNCA repitas el nombre del archivo ni el título general como label de múltiples nodos
-- NUNCA uses labels genéricos como "Concepto 1" o "Página N"`
+REGLAS ABSOLUTAS:
+- PROHIBIDO usar "${forbiddenLabel}" como label de más de 1 nodo
+- PROHIBIDO repetir el mismo label en dos nodos
+- CADA label debe ser el nombre específico del concepto: un músculo, un nervio, una arteria, una función, etc.
+- Si ves "Músculo Bíceps Braquial" en una imagen → label = "Bíceps Braquial"
+- Si ves "Nervio Radial" → label = "Nervio Radial"
+- 1 nodo "main" (tema general), 3-5 "sub" (grupos/categorías), 5-8 "detail" (estructuras específicas)
+- Distribuí en 1200x900px`
     : `Eres un profesor experto organizando material de estudio en un mapa conceptual. Comprendé el tema en profundidad e identificá todos los conceptos importantes.
 ${textSection}
 Respondé SOLO con JSON válido, sin texto antes ni después. Generá 10-12 nodos:
@@ -635,27 +639,26 @@ Reglas:
 - NUNCA uses labels genéricos
 - CRÍTICO: cada nodo debe tener un label ÚNICO y ESPECÍFICO. NUNCA repitas el nombre del archivo como label de múltiples nodos`;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     let raw;
     try {
       raw = await askClaude(prompt, selectedImages, 4000);
     } catch (err) {
-      // Timeout or network error — don't retry, just fail fast (avoid extra charges)
+      // Timeout or network error — don't retry (avoid extra charges)
       if (err.name === 'AbortError' || err.message?.includes('abort') || err.message?.includes('network')) throw err;
-      if (attempt < 2) continue;
+      if (attempt < 1) continue;
       throw err;
     }
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) { if (attempt < 2) continue; throw new Error('Respuesta inválida de la IA'); }
+    if (!match) { if (attempt < 1) continue; throw new Error('Respuesta inválida de la IA'); }
     let result;
-    try { result = JSON.parse(match[0]); } catch { if (attempt < 2) continue; throw new Error('JSON inválido'); }
-    if (!result.nodes?.length) { if (attempt < 2) continue; throw new Error('Mapa vacío'); }
-    // Reject if labels are not sufficiently unique (AI repeated the file title everywhere)
+    try { result = JSON.parse(match[0]); } catch { if (attempt < 1) continue; throw new Error('JSON inválido'); }
+    if (!result.nodes?.length) { if (attempt < 1) continue; throw new Error('Mapa vacío'); }
     const labels = result.nodes.map(n => (n.label || '').trim().toLowerCase());
     const uniqueLabels = new Set(labels);
-    if (uniqueLabels.size < Math.ceil(labels.length * 0.6)) {
+    if (uniqueLabels.size < Math.ceil(labels.length * 0.5)) {
       console.warn(`[MILA] Bad map (attempt ${attempt + 1}): ${uniqueLabels.size}/${labels.length} unique labels — retrying`);
-      if (attempt < 2) continue;
+      if (attempt < 1) continue;
     }
     return result;
   }
