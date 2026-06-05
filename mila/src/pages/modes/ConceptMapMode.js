@@ -187,6 +187,50 @@ export default function ConceptMapMode({ summary }) {
   }, [isFullscreen]);
 
   const [nodePanel, setNodePanel] = useState(null); // { node, tab: 'flashcards'|'questions' }
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedNodes, setSelectedNodes] = useState(new Set());
+  const [editingNode, setEditingNode] = useState(null); // node being edited in modal
+
+  function toggleSelectionMode() {
+    setSelectionMode(s => !s);
+    setSelectedNodes(new Set());
+  }
+
+  function toggleSelectNode(nodeId) {
+    setSelectedNodes(prev => {
+      const n = new Set(prev);
+      n.has(nodeId) ? n.delete(nodeId) : n.add(nodeId);
+      return n;
+    });
+  }
+
+  function deleteSelectedNodes() {
+    if (!mapData || selectedNodes.size === 0) return;
+    const remaining = mapData.nodes.filter(n => !selectedNodes.has(n.id));
+    const remainingIds = new Set(remaining.map(n => n.id));
+    const remainingEdges = (mapData.edges || []).filter(e => remainingIds.has(e.from) && remainingIds.has(e.to));
+    const updated = { ...mapData, nodes: remaining, edges: remainingEdges };
+    setMapData(updated);
+    setPositions(prev => {
+      const p = { ...prev };
+      selectedNodes.forEach(id => delete p[id]);
+      return p;
+    });
+    updateSummary(summary.id, { conceptMap: updated });
+    setSelectedNodes(new Set());
+    setSelectionMode(false);
+  }
+
+  function saveNodeEdit(nodeId, changes) {
+    if (!mapData) return;
+    const updated = {
+      ...mapData,
+      nodes: mapData.nodes.map(n => n.id === nodeId ? { ...n, ...changes } : n),
+    };
+    setMapData(updated);
+    updateSummary(summary.id, { conceptMap: updated });
+    setEditingNode(null);
+  }
 
   const panRef = useRef(pan);
   const scaleRef = useRef(scale);
@@ -726,6 +770,13 @@ export default function ConceptMapMode({ summary }) {
                 {bgStyle === 'none' ? '□' : bgStyle === 'dots' ? '⋯' : '⊞'}
               </button>
               <button onClick={regenerate} style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 8px', width: 'auto' }}>↺</button>
+              <button
+                onClick={toggleSelectionMode}
+                title={selectionMode ? 'Salir de selección' : 'Seleccionar nodos'}
+                style={{ ...toolBtnStyle, fontSize: 12, padding: '4px 8px', width: 'auto', background: selectionMode ? 'var(--ash-plum)' : 'var(--ghost-white)', color: selectionMode ? 'white' : 'var(--text-dark)', border: selectionMode ? '1px solid var(--ash-plum)' : '1px solid var(--soft-grey)' }}
+              >
+                ✓
+              </button>
               {isFullscreen && (
                 <button
                   onClick={() => setPanelCollapsed(true)}
@@ -745,6 +796,34 @@ export default function ConceptMapMode({ summary }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Selection action bar */}
+      {selectionMode && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 12px', borderRadius: 10, background: 'var(--cloud-veil)', border: '1px solid var(--whisper-grey)', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1 }}>
+            {selectedNodes.size === 0 ? 'Tocá un nodo para seleccionarlo' : `${selectedNodes.size} nodo${selectedNodes.size > 1 ? 's' : ''} seleccionado${selectedNodes.size > 1 ? 's' : ''}`}
+          </span>
+          {selectedNodes.size === 1 && (
+            <button
+              onClick={() => {
+                const node = mapData.nodes.find(n => n.id === [...selectedNodes][0]);
+                if (node) setEditingNode(node);
+              }}
+              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto', background: 'var(--ghost-white)' }}
+            >
+              ✏️ Editar
+            </button>
+          )}
+          {selectedNodes.size > 0 && (
+            <button
+              onClick={deleteSelectedNodes}
+              style={{ ...toolBtnStyle, fontSize: 11, padding: '4px 10px', width: 'auto', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}
+            >
+              🗑 Eliminar
+            </button>
+          )}
+        </div>
       )}
 
       {/* Canvas — touch-action:none forced on all children to prevent iOS scroll override */}
@@ -853,18 +932,23 @@ export default function ConceptMapMode({ summary }) {
                 zIndex: isExpanded ? 20 : isMain ? 5 : 2,
                 borderRadius: 12,
                 boxShadow: isExpanded ? '0 16px 48px rgba(0,0,0,0.22)' : '0 4px 16px rgba(0,0,0,0.10)',
-                background: 'var(--ghost-white)',
-                border: `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
+                background: selectedNodes.has(node.id) ? 'rgba(99,102,241,0.08)' : 'var(--ghost-white)',
+                border: selectedNodes.has(node.id) ? '2px solid #6366f1' : `1.5px solid ${isSub ? 'var(--driftwood)' : 'var(--whisper-grey)'}`,
                 overflow: 'hidden',
-                transition: 'box-shadow 0.25s cubic-bezier(0.4,0,0.2,1)',
+                transition: 'box-shadow 0.25s cubic-bezier(0.4,0,0.2,1), border 0.15s, background 0.15s',
               }}>
-                {/* Header — drag handle + expand toggle */}
+                {/* Header — drag handle + expand/select toggle */}
                 <div
-                  onMouseDown={e => startNodeDrag(e, node)}
-                  onClick={() => toggleExpand(node.id)}
-                  style={{ padding: '10px 12px', cursor: 'grab', display: 'flex', alignItems: 'flex-start', gap: 8, userSelect: 'none' }}
+                  onMouseDown={e => { if (!selectionMode) startNodeDrag(e, node); }}
+                  onClick={() => selectionMode ? toggleSelectNode(node.id) : toggleExpand(node.id)}
+                  style={{ padding: '10px 12px', cursor: selectionMode ? 'pointer' : 'grab', display: 'flex', alignItems: 'flex-start', gap: 8, userSelect: 'none' }}
                 >
-                  <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: dotColor, transition: 'background 0.3s' }} />
+                  {selectionMode
+                    ? <div style={{ flexShrink: 0, width: 16, height: 16, borderRadius: 4, border: `2px solid ${selectedNodes.has(node.id) ? '#6366f1' : 'var(--whisper-grey)'}`, background: selectedNodes.has(node.id) ? '#6366f1' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', marginTop: 1 }}>
+                        {selectedNodes.has(node.id) && <span style={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                      </div>
+                    : <div style={{ flexShrink: 0, marginTop: 3, width: 7, height: 7, borderRadius: '50%', background: dotColor, transition: 'background 0.3s' }} />
+                  }
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dark)', lineHeight: 1.3, marginBottom: 3 }}>{node.label}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-light)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical' }}>{node.summary}</div>
@@ -1051,6 +1135,67 @@ export default function ConceptMapMode({ summary }) {
     </div>
   );
 
+  // ── Node edit modal ────────────────────────────────────────────────────
+  const editModal = editingNode ? ReactDOM.createPortal(
+    (() => {
+      const en = editingNode;
+      let localLabel = en.label;
+      let localSummary = en.summary || '';
+      let localContent = en.content || '';
+      let localBullets = (en.bullets || []).join('\n');
+      return (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 999999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setEditingNode(null)}
+        >
+          <form
+            onClick={e => e.stopPropagation()}
+            onSubmit={e => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              saveNodeEdit(en.id, {
+                label: fd.get('label') || en.label,
+                summary: fd.get('summary') || '',
+                content: fd.get('content') || '',
+                bullets: fd.get('bullets') ? fd.get('bullets').split('\n').map(b => b.trim()).filter(Boolean) : [],
+              });
+            }}
+            style={{ background: 'var(--ghost-white)', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}
+          >
+            <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--whisper-grey)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-dark)' }}>Editar nodo</span>
+              <button type="button" onClick={() => setEditingNode(null)} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--soft-grey)', background: 'transparent', fontSize: 15, color: 'var(--text-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                { name: 'label', label: 'Título del nodo', defaultValue: en.label, placeholder: 'Ej: Músculo Bíceps Braquial', rows: 1 },
+                { name: 'summary', label: 'Resumen corto', defaultValue: en.summary || '', placeholder: 'Descripción breve', rows: 2 },
+                { name: 'content', label: 'Contenido detallado', defaultValue: en.content || '', placeholder: 'Explicación completa', rows: 4 },
+                { name: 'bullets', label: 'Puntos clave (uno por línea)', defaultValue: (en.bullets || []).join('\n'), placeholder: 'Origen: ...\nInserción: ...\nInervación: ...', rows: 4 },
+              ].map(field => (
+                <div key={field.name}>
+                  <label style={{ fontSize: 11, color: 'var(--text-light)', display: 'block', marginBottom: 4, fontWeight: 500 }}>{field.label}</label>
+                  <textarea
+                    name={field.name}
+                    defaultValue={field.defaultValue}
+                    placeholder={field.placeholder}
+                    rows={field.rows}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--soft-grey)', background: 'var(--pale-mist)', color: 'var(--text-dark)', fontSize: 13, lineHeight: 1.5, resize: 'vertical', outline: 'none' }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--whisper-grey)', display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button type="submit" style={{ flex: 1, padding: '10px', borderRadius: 10, background: 'var(--ash-plum)', color: 'white', fontSize: 13, fontWeight: 600, border: 'none' }}>Guardar cambios</button>
+              <button type="button" onClick={() => setEditingNode(null)} style={{ padding: '10px 16px', borderRadius: 10, background: 'transparent', border: '1px solid var(--soft-grey)', color: 'var(--text-mid)', fontSize: 13 }}>Cancelar</button>
+            </div>
+          </form>
+        </div>
+      );
+    })(),
+    document.body
+  ) : null;
+
   const panelContent = nodePanel ? (() => {
     const pNode = nodePanel.node;
     const pTab = nodePanel.tab;
@@ -1136,6 +1281,7 @@ export default function ConceptMapMode({ summary }) {
           document.body
         )}
         {panelContent}
+        {editModal}
       </>
     );
   }
@@ -1144,6 +1290,7 @@ export default function ConceptMapMode({ summary }) {
     <>
       {mapContent}
       {panelContent}
+      {editModal}
     </>
   );
 }
