@@ -561,6 +561,8 @@ function cleanTextForMap(text) {
   return text
     // Remove "CARA N" / "CARA N:" structural page labels
     .replace(/\bCARA\s+\d+\s*:?/gi, ' ')
+    // Remove "TOPIC N" page header patterns like "CORAZÓN 8", "BRAZO 3"
+    .replace(/^[A-ZÁÉÍÓÚÑÜ\s]{3,}\s+\d+\s*$/gim, ' ')
     // Remove bare page numbers like "Página 3" or "PAGE 2"
     .replace(/\b(P[ÁA]GINA|PAGE)\s+\d+\b/gi, ' ')
     // Collapse multiple spaces/newlines
@@ -582,11 +584,15 @@ export async function generateConceptMapAI(text, images = []) {
   const forbiddenLabel = cleanText.split('\n')[0]?.trim().slice(0, 60) || '';
 
   const prompt = hasImages
-    ? `Eres un profesor experto en anatomía y ciencias de la salud analizando apuntes de un alumno. Las imágenes son páginas de un resumen/apunte. Tu tarea: extraer TODOS los conceptos específicos (estructuras, músculos, nervios, arterias, funciones, relaciones) y armar un mapa conceptual detallado.
-${textSection}
-PASO 1 — Antes de responder, listá mentalmente todos los nombres específicos que ves en las imágenes: músculos (ej: bíceps braquial, braquiorradial), nervios (ej: nervio radial, mediano), arterias, tendones, inserciones, orígenes, funciones, etc.
+    ? `Eres un profesor experto en anatomía y ciencias de la salud analizando apuntes de un alumno. Las imágenes son páginas numeradas de un resumen (pueden verse como "CORAZÓN 1", "CORAZÓN 2", "BRAZO 3", etc. — esos son TÍTULOS DE PÁGINA, no conceptos).
 
-PASO 2 — Usá ESE listado como labels de los nodos. NUNCA uses el título de la página ni el nombre del archivo como label.
+Tu tarea: extraer TODOS los conceptos anatómicos/fisiológicos específicos que aparecen en el CONTENIDO de las páginas y armar un mapa conceptual detallado.
+${textSection}
+PASO 1 — Ignorá los títulos de página (ej: "CORAZÓN 8", "BRAZO 3"). En cambio, listá mentalmente los nombres específicos que ves en el CUERPO de cada imagen: músculos, nervios, arterias, válvulas, cámaras, funciones, relaciones, etc.
+Ejemplos correctos: "Ventrículo Izquierdo", "Válvula Mitral", "Nodo Sinusal", "Nervio Radial", "Bíceps Braquial"
+Ejemplos INCORRECTOS: "CORAZÓN 8", "BRAZO 3", "Corazón 17" — NUNCA usar título+número como label.
+
+PASO 2 — Usá ESE listado como labels de los nodos.
 
 Respondé SOLO con JSON válido. Generá 10-14 nodos:
 {
@@ -606,11 +612,9 @@ Respondé SOLO con JSON válido. Generá 10-14 nodos:
 }
 
 REGLAS ABSOLUTAS:
-- PROHIBIDO usar "${forbiddenLabel}" como label de más de 1 nodo
+- PROHIBIDO: labels con número al final como "CORAZÓN 8", "Brazo 3", "${forbiddenLabel} 1"
 - PROHIBIDO repetir el mismo label en dos nodos
-- CADA label debe ser el nombre específico del concepto: un músculo, un nervio, una arteria, una función, etc.
-- Si ves "Músculo Bíceps Braquial" en una imagen → label = "Bíceps Braquial"
-- Si ves "Nervio Radial" → label = "Nervio Radial"
+- CADA label debe ser el nombre específico del concepto: un músculo, una válvula, una cámara, un nervio, etc.
 - 1 nodo "main" (tema general), 3-5 "sub" (grupos/categorías), 5-8 "detail" (estructuras específicas)
 - Distribuí en 1200x900px`
     : `Eres un profesor experto organizando material de estudio en un mapa conceptual. Comprendé el tema en profundidad e identificá todos los conceptos importantes.
@@ -656,8 +660,11 @@ Reglas:
     if (!result.nodes?.length) { if (attempt < 1) continue; throw new Error('Mapa vacío'); }
     const labels = result.nodes.map(n => (n.label || '').trim().toLowerCase());
     const uniqueLabels = new Set(labels);
-    if (uniqueLabels.size < Math.ceil(labels.length * 0.5)) {
-      console.warn(`[MILA] Bad map (attempt ${attempt + 1}): ${uniqueLabels.size}/${labels.length} unique labels — retrying`);
+    // Detect "WORD NUMBER" pattern (e.g. "corazón 8", "brazo 3")
+    const numberedLabels = labels.filter(l => /\b\w+\s+\d+$/.test(l));
+    const tooManyNumbered = numberedLabels.length > Math.ceil(labels.length * 0.3);
+    if (uniqueLabels.size < Math.ceil(labels.length * 0.5) || tooManyNumbered) {
+      console.warn(`[MILA] Bad map (attempt ${attempt + 1}): ${uniqueLabels.size}/${labels.length} unique, ${numberedLabels.length} numbered — retrying`);
       if (attempt < 1) continue;
     }
     return result;
